@@ -76,11 +76,14 @@ These settings live in Supabase Dashboard → **Authentication** → **Settings*
 | Site URL | `https://nysterys.com/hub/` |
 | Redirect URLs | `https://nysterys.com/hub/` |
 
-These settings in **Settings → API**:
+These settings under **Authentication → URL Configuration**:
 
 | Setting | Required value |
 |---------|---------------|
-| Allowed Origins (CORS) | `https://nysterys.com` |
+| Site URL | `https://nysterys.com/hub/` |
+| Redirect URLs | `https://nysterys.com/hub/` |
+
+> The standalone "Allowed Origins" CORS field was removed from the Supabase dashboard. CORS is now handled automatically for authenticated requests, which covers all usage in this app.
 
 ---
 
