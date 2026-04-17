@@ -1,0 +1,244 @@
+{
+  "about": {
+    "stats": [
+      { "value": "1.6M+", "label": "Combined Followers" },
+      { "value": "72M+",  "label": "Combined Likes" },
+      { "value": "3",     "label": "Platforms" },
+      { "value": "2",     "label": "Creators" }
+    ]
+  },
+  "roster": [
+    {
+      "id": "kym",
+      "name": "Kym",
+      "tag": "Content Creator",
+      "bio": "Kym is a lifestyle and fashion creator known for her fit checks, authentic wasian perspective, and JROTC content. With a natural presence on camera and a growing audience, she connects with fans through real, relatable storytelling.",
+      "followers": "224K",
+      "likes": "17.6M",
+      "engagementRate": "11%",
+      "tiktokHandle": "kymchi_n_crackers",
+      "photo": "kym.jpg",
+      "socials": {
+        "tiktok": "https://www.tiktok.com/@kymchi_n_crackers",
+        "instagram": "https://www.instagram.com/glittery.unicorn.farts/",
+        "youtube": "https://www.youtube.com/@ShimmieKymmie"
+      },
+      "tiktokStats": {
+        "followers":           224600,
+        "allTimeViews":        128252569,
+        "allTimeLikes":        17609362,
+        "allTimeShares":       913882,
+        "allTimeComments":     79240,
+        "totalVideos":         1600,
+        "avgViewsPerVideo":    80158,
+        "medianViewsPerVideo": 15898,
+        "avgWatchTimeSec":     6.83,
+        "engagementRate":      0.11,
+        "femaleAudience":      0.80,
+        "usAudience":          0.373,
+        "dataAsOf":            "2026-04-11",
+        "viewDistribution": [
+          { "label": "<10K",     "count": 666, "pct": 41.6 },
+          { "label": "10K-50K",  "count": 584, "pct": 36.5 },
+          { "label": "50K-250K", "count": 269, "pct": 16.8 },
+          { "label": "250K-1M",  "count": 62,  "pct": 3.9  },
+          { "label": "1M+",      "count": 19,  "pct": 1.2  }
+        ]
+      },
+      "audience": {
+        "gender": [
+          { "label": "Female", "value": 80 },
+          { "label": "Male",   "value": 19 },
+          { "label": "Other",  "value": 1  }
+        ],
+        "age": [
+          { "label": "18-24", "value": 40.5 },
+          { "label": "25-34", "value": 26.3 },
+          { "label": "35-44", "value": 18.3 },
+          { "label": "45-54", "value": 9.9  },
+          { "label": "55+",   "value": 5.0  }
+        ],
+        "topCountries": [
+          { "label": "United States",  "value": 37.3 },
+          { "label": "United Kingdom", "value": 6.7  },
+          { "label": "Canada",         "value": 6.5  },
+          { "label": "Australia",      "value": 4.1  },
+          { "label": "Philippines",    "value": 2.3  }
+        ]
+      },
+      "contentCategories": ["Fashion", "Lifestyle", "Beauty", "Teenage", "School", "College", "JROTC"],
+      "rateCard": {
+        "currency": "USD",
+        "packages": [
+          {
+            "id":    "single",
+            "name":  "Single Post",
+            "desc":  "One organic TikTok video created, drafted for approval, and posted to the creator's account.",
+            "priceMin": 75,
+            "priceMax": 125,
+            "priceFixed": null,
+            "unit":  "per post"
+          },
+          {
+            "id":    "campaign",
+            "name":  "Campaign Post",
+            "desc":  "5 posts over an agreed period at a preferred rate. Sustained audience exposure at $80 per post versus the standard single post rate.",
+            "priceMin": null,
+            "priceMax": null,
+            "priceFixed": 400,
+            "unit":  "flat (5 posts — $80 each)"
+          }
+        ],
+        "addons": [
+          {
+            "name": "Exclusivity",
+            "desc": "Prevents the creator from posting for directly competing brands for an agreed period."
+          },
+          {
+            "name": "Usage Rights",
+            "desc": "License to repost or repurpose the content on your own channels and paid media."
+          },
+          {
+            "name": "Spark Code",
+            "desc": "A TikTok-issued code that lets you boost the organic post as a paid ad directly from the creator's account, preserving authentic engagement."
+          }
+        ],
+        "addonNote": "All add-ons are priced on request. Contact us with your requirements and we will provide a tailored quote.",
+        "cpm": {
+          "medianSingleMin": 4.72,
+          "medianSingleMax": 7.86,
+          "campaignPerPost": 5.03,
+          "note": "CPM is calculated on median views per post. Actual CPM varies by video — the view distribution chart shows why. High-performing posts deliver significantly lower CPM.",
+          "viewDistribution": [
+            { "label": "<10K",     "cpm": 20.00 },
+            { "label": "10K-50K",  "cpm": 3.33  },
+            { "label": "50K-250K", "cpm": 0.67  },
+            { "label": "250K-1M",  "cpm": 0.16  },
+            { "label": "1M+",      "cpm": 0.07  }
+          ]
+        }
+      }
+    },
+    {
+      "id": "mys",
+      "name": "Mys",
+      "tag": "Content Creator",
+      "bio": "Mys is a breakout lifestyle and trend creator with over 1.4 million followers and 54 million likes on TikTok. Known for her magnetic energy, swag-forward content, and deeply personal storytelling, she has built one of the most engaged young audiences on the platform.",
+      "followers": "1.4M",
+      "likes": "54.7M",
+      "engagementRate": "13.8%",
+      "tiktokHandle": "mysthegreat",
+      "photo": "mys.jpg",
+      "socials": {
+        "tiktok": "https://www.tiktok.com/@mysthegreat",
+        "instagram": "https://www.instagram.com/therealmysthegreat/",
+        "youtube": "https://www.youtube.com/@Mys-The-Great"
+      },
+      "tiktokStats": {
+        "followers":           1385831,
+        "allTimeViews":        410380753,
+        "allTimeLikes":        54728115,
+        "totalVideos":         692,
+        "avgViewsPerVideo":    593036,
+        "medianViewsPerVideo": 263508,
+        "avgWatchTimeSec":     9.95,
+        "engagementRate":      0.138,
+        "femaleAudience":      0.85,
+        "dataAsOf":            "2026-04-15",
+        "viewDistribution": [
+          { "label": "<10K",     "count": 2,   "pct": 0.3  },
+          { "label": "10K-50K",  "count": 132, "pct": 19.1 },
+          { "label": "50K-250K", "count": 202, "pct": 29.2 },
+          { "label": "250K-1M",  "count": 271, "pct": 39.2 },
+          { "label": "1M+",      "count": 85,  "pct": 12.3 }
+        ]
+      },
+      "audience": {
+        "gender": [
+          { "label": "Female", "value": 85 },
+          { "label": "Male",   "value": 14 },
+          { "label": "Other",  "value": 1  }
+        ],
+        "age": [
+          { "label": "18-24", "value": 40.5 },
+          { "label": "25-34", "value": 26.3 },
+          { "label": "35-44", "value": 18.3 },
+          { "label": "45-54", "value": 9.9  },
+          { "label": "55+",   "value": 5.0  }
+        ],
+        "topCountries": [
+          { "label": "United States",  "value": 30.5 },
+          { "label": "United Kingdom", "value": 6.4  },
+          { "label": "Canada",         "value": 6.0  },
+          { "label": "Philippines",    "value": 3.5  },
+          { "label": "Australia",      "value": 3.4  }
+        ]
+      },
+      "contentCategories": ["Fashion", "Lifestyle", "Music", "Beauty", "Teenage", "School", "Concerts"],
+      "rateCard": {
+        "currency": "USD",
+        "packages": [
+          {
+            "id":    "single",
+            "name":  "Single Post",
+            "desc":  "One organic TikTok video created, drafted for approval, and posted to the creator's account.",
+            "priceMin": 500,
+            "priceMax": 800,
+            "priceFixed": null,
+            "unit":  "per post"
+          },
+          {
+            "id":    "campaign",
+            "name":  "Campaign Post",
+            "desc":  "5 posts over an agreed period at a preferred rate. Sustained audience exposure at $400 per post versus the standard single post rate.",
+            "priceMin": null,
+            "priceMax": null,
+            "priceFixed": 2000,
+            "unit":  "flat (5 posts — $400 each)"
+          }
+        ],
+        "addons": [
+          {
+            "name": "Exclusivity",
+            "desc": "Prevents the creator from posting for directly competing brands for an agreed period."
+          },
+          {
+            "name": "Usage Rights",
+            "desc": "License to repost or repurpose the content on your own channels and paid media."
+          },
+          {
+            "name": "Spark Code",
+            "desc": "A TikTok-issued code that lets you boost the organic post as a paid ad directly from the creator's account, preserving authentic engagement."
+          }
+        ],
+        "addonNote": "All add-ons are priced on request. Contact us with your requirements and we will provide a tailored quote.",
+        "cpm": {
+          "medianSingleMin": 1.90,
+          "medianSingleMax": 3.04,
+          "campaignPerPost": 1.52,
+          "note": "CPM is calculated on median views per post. Actual CPM varies by video — the view distribution chart shows why. High-performing posts deliver significantly lower CPM.",
+          "viewDistribution": [
+            { "label": "<10K",     "cpm": 130.00 },
+            { "label": "10K-50K",  "cpm": 21.67  },
+            { "label": "50K-250K", "cpm": 4.33   },
+            { "label": "250K-1M",  "cpm": 1.04   },
+            { "label": "1M+",      "cpm": 0.43   }
+          ]
+        }
+      }
+    }
+  ],
+  "mediaKit": {
+    "rosterOverview": [
+      { "value": "1.6M+",  "label": "Combined Followers" },
+      { "value": "72M+",   "label": "Combined Likes" },
+      { "value": "410M+",  "label": "Combined Video Views" },
+      { "value": "83%",    "label": "Female Audience" }
+    ],
+    "brandCategories": [
+      "Music", "Labels", "Bands", "Artists",
+      "Beauty", "Fashion", "Clothing", "Accessories",
+      "Shoes", "Apparel", "Make-Up", "Lifestyle"
+    ]
+  }
+}

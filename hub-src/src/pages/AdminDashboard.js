@@ -1,0 +1,62 @@
+import React, { useState } from 'react';
+import Sidebar from '../components/shared/Sidebar';
+import AdminOverview from '../components/admin/AdminOverview';
+import CampaignsView from '../components/admin/CampaignsView';
+import AgenciesView from '../components/admin/AgenciesView';
+import PlatformsView from '../components/admin/PlatformsView';
+import DeliverablesTypesView from '../components/admin/DeliverablesTypesView';
+import PaymentsView from '../components/admin/PaymentsView';
+import UsersView from '../components/admin/UsersView';
+import AnalyticsView from '../components/admin/AnalyticsView';
+import TikTokAccountsView from '../components/admin/TikTokAccountsView';
+import PaymentDestinationsView from '../components/admin/PaymentDestinationsView';
+
+const NAV = [
+  {
+    label: null,
+    items: [
+      { view: 'overview', icon: '◈', label: 'Overview' },
+      { view: 'campaigns', icon: '◎', label: 'Campaigns' },
+      { view: 'payments', icon: '◇', label: 'Payments' },
+      { view: 'analytics', icon: '◉', label: 'Analytics' },
+    ]
+  },
+  {
+    label: 'Setup',
+    items: [
+      { view: 'agencies', icon: '⬡', label: 'Agencies & Labels' },
+      { view: 'platforms', icon: '◻', label: 'Platforms' },
+      { view: 'deliverable-types', icon: '◈', label: 'Deliverable Types' },
+      { view: 'payout-destinations', icon: '◇', label: 'Payment Destinations' },
+      { view: 'tiktok-accounts', icon: '◎', label: 'TikTok Accounts' },
+      { view: 'users', icon: '○', label: 'Users' },
+    ]
+  }
+];
+
+export default function AdminDashboard() {
+  const [activeView, setActiveView] = useState('overview');
+
+  function renderView() {
+    switch (activeView) {
+      case 'overview': return <AdminOverview setActiveView={setActiveView} />;
+      case 'campaigns': return <CampaignsView />;
+      case 'payments': return <PaymentsView />;
+      case 'analytics': return <AnalyticsView />;
+      case 'agencies': return <AgenciesView />;
+      case 'platforms': return <PlatformsView />;
+      case 'deliverable-types': return <DeliverablesTypesView />;
+      case 'payout-destinations': return <PaymentDestinationsView />;
+      case 'tiktok-accounts': return <TikTokAccountsView />;
+      case 'users': return <UsersView />;
+      default: return <AdminOverview setActiveView={setActiveView} />;
+    }
+  }
+
+  return (
+    <div className="app-layout">
+      <Sidebar navItems={NAV} activeView={activeView} setActiveView={setActiveView} />
+      <div className="main-content">{renderView()}</div>
+    </div>
+  );
+}
