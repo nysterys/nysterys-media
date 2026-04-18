@@ -19,27 +19,35 @@ const NAV = [
 
 export default function CreatorDashboard() {
   const [activeView, setActiveView] = useState('overview');
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
+  const [pendingCampaignId, setPendingCampaignId] = useState(null);
 
   function navigateToCampaign(campaignId) {
-    setSelectedCampaignId(campaignId);
+    setPendingCampaignId(campaignId);
     setActiveView('campaigns');
   }
 
-  function renderView() {
-    switch (activeView) {
-      case 'overview': return <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} />;
-      case 'campaigns': return <CreatorCampaigns initialCampaignId={selectedCampaignId} onCampaignOpened={() => setSelectedCampaignId(null)} />;
-      case 'payments': return <CreatorPayments />;
-      case 'analytics': return <CreatorAnalytics />;
-      default: return <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} />;
-    }
-  }
+  const show = (view) => ({ display: activeView === view ? 'contents' : 'none' });
 
   return (
     <div className="app-layout">
       <Sidebar navItems={NAV} activeView={activeView} setActiveView={setActiveView} />
-      <div className="main-content">{renderView()}</div>
+      <div className="main-content">
+        <div style={show('overview')}>
+          <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} />
+        </div>
+        <div style={show('campaigns')}>
+          <CreatorCampaigns
+            pendingCampaignId={pendingCampaignId}
+            onCampaignOpened={() => setPendingCampaignId(null)}
+          />
+        </div>
+        <div style={show('payments')}>
+          <CreatorPayments />
+        </div>
+        <div style={show('analytics')}>
+          <CreatorAnalytics />
+        </div>
+      </div>
     </div>
   );
 }

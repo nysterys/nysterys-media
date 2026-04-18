@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
@@ -9,7 +9,7 @@ function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
-export default function CreatorCampaigns({ initialCampaignId, onCampaignOpened }) {
+export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,22 +17,18 @@ export default function CreatorCampaigns({ initialCampaignId, onCampaignOpened }
   const [tab, setTab] = useState('deliverables');
   const [filter, setFilter] = useState('all');
 
-  // Capture on mount — parent clears it immediately after navigating so we need our own copy
-  const pendingCampaignId = useRef(initialCampaignId || null);
-
   useEffect(() => { fetch(); }, []);
 
-  // Once campaigns load, open the pending campaign if one was requested
+  // Open campaign when pendingCampaignId is set — campaigns may already be loaded
   useEffect(() => {
-    if (!pendingCampaignId.current || campaigns.length === 0) return;
-    const target = campaigns.find(c => c.id === pendingCampaignId.current);
+    if (!pendingCampaignId || campaigns.length === 0) return;
+    const target = campaigns.find(c => c.id === pendingCampaignId);
     if (target) {
       setSelected(target);
       setTab('deliverables');
-      pendingCampaignId.current = null;
       if (onCampaignOpened) onCampaignOpened();
     }
-  }, [campaigns]);
+  }, [pendingCampaignId, campaigns]);
 
   async function fetch() {
     const { data } = await supabase
