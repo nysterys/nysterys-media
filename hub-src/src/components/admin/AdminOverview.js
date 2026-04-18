@@ -17,7 +17,7 @@ export default function AdminOverview({ setActiveView }) {
 
   async function fetchStats() {
     const [campaigns, invoices] = await Promise.all([
-      supabase.from('campaigns').select('*, agency:agencies(name), creator:profiles(full_name, creator_name), invoices(payment_status, invoice_amount)').order('created_at', { ascending: false }),
+      supabase.from('campaigns').select('*, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name), invoices(payment_status, invoice_amount)').order('created_at', { ascending: false }),
       supabase.from('invoices').select('payment_status, invoice_amount'),
     ]);
 

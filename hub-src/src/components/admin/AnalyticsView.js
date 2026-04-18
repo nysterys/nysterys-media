@@ -30,27 +30,21 @@ export default function AnalyticsView() {
     const username = selectedAccount.tiktok_username;
 
     const [profileRes, genderRes, countryRes, hourlyRes, videoRes] = await Promise.all([
-      supabase.from('tiktok_profile_insights')
+      supabase.from('tiktok_profile_insights_view')
         .select('*')
         .eq('tiktok_username', username)
         .gte('date', since)
         .order('date', { ascending: true }),
-      supabase.from('tiktok_audience_gender')
+      supabase.from('tiktok_audience_gender_view')
         .select('*')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: false })
-        .limit(10),
-      supabase.from('tiktok_audience_country')
+        .eq('tiktok_username', username),
+      supabase.from('tiktok_audience_country_view')
         .select('*')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: false })
-        .limit(50),
-      supabase.from('tiktok_audience_hourly')
+        .eq('tiktok_username', username),
+      supabase.from('tiktok_audience_hourly_view')
         .select('*')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: false })
-        .limit(48),
-      supabase.from('tiktok_video_insights')
+        .eq('tiktok_username', username),
+      supabase.from('tiktok_video_insights_view')
         .select('*')
         .eq('tiktok_username', username)
         .order('total_play', { ascending: false })
@@ -104,16 +98,17 @@ export default function AnalyticsView() {
     ? latestProfile.followers_count - earliestProfile.followers_count
     : null;
 
-  const totalViews = profile.reduce((s, d) => s + (d.video_views || 0), 0);
-  const totalLikes = profile.reduce((s, d) => s + (d.likes || 0), 0);
-  const totalComments = profile.reduce((s, d) => s + (d.comments || 0), 0);
-  const totalShares = profile.reduce((s, d) => s + (d.shares || 0), 0);
+  const totalViews = profile.reduce((s, d) => s + (Number(d.video_views) || 0), 0);
+  const totalLikes = profile.reduce((s, d) => s + (Number(d.likes) || 0), 0);
+  const totalComments = profile.reduce((s, d) => s + (Number(d.comments) || 0), 0);
+  const totalShares = profile.reduce((s, d) => s + (Number(d.shares) || 0), 0);
 
   // Gender: average across recent rows
   const genderMap = {};
   data?.gender?.forEach(g => {
     if (!genderMap[g.gender]) genderMap[g.gender] = [];
-    genderMap[g.gender].push(g.percentage);
+    // Coupler.io returns decimals (0.85) not percentages (85) — multiply by 100
+    genderMap[g.gender].push(g.percentage * 100);
   });
   const genderAvg = Object.entries(genderMap).map(([k, vals]) => ({
     label: k,
@@ -122,23 +117,26 @@ export default function AnalyticsView() {
   }));
 
   // Country: latest date, top 8
-  const latestDate = data?.country?.[0]?.date;
-  const topCountries = data?.country
-    ?.filter(c => c.date === latestDate)
-    ?.sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
-    ?.slice(0, 8) || [];
+  const topCountries = [...(data?.country || [])]
+    .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
+    .slice(0, 8)
+    .map(c => ({ ...c, percentage: Math.round((c.percentage || 0) * 100 * 10) / 10 }));
   const maxCountryPct = Math.max(...topCountries.map(c => c.percentage || 0), 1);
 
   // Hourly: average activity by hour across recent days
   const hourlyMap = {};
   data?.hourly?.forEach(h => {
-    if (!hourlyMap[h.hour]) hourlyMap[h.hour] = [];
-    hourlyMap[h.hour].push(h.activity_score || 0);
+    const hr = parseInt(h.hour, 10);
+    if (!hourlyMap[hr]) hourlyMap[hr] = [];
+    hourlyMap[hr].push(Number(h.activity_score) || 0);
   });
-  const hourlyAvg = Array.from({ length: 24 }, (_, i) => ({
+  const hourlyRaw = Array.from({ length: 24 }, (_, i) => ({
     label: i === 0 ? '12a' : i === 12 ? '12p' : i < 12 ? `${i}a` : `${i - 12}p`,
     value: hourlyMap[i] ? hourlyMap[i].reduce((s, v) => s + v, 0) / hourlyMap[i].length : 0,
   }));
+  // Normalize to 0-100 so bar chart shows relative variation
+  const hourlyMax = Math.max(...hourlyRaw.map(h => h.value), 1);
+  const hourlyAvg = hourlyRaw.map(h => ({ ...h, value: (h.value / hourlyMax) * 100 }));
   const peakHour = hourlyAvg.reduce((max, h) => h.value > max.value ? h : max, { value: 0, label: '—' });
 
   return (
@@ -172,6 +170,8 @@ export default function AnalyticsView() {
             <option value={14}>Last 14 days</option>
             <option value={30}>Last 30 days</option>
             <option value={60}>Last 60 days</option>
+            <option value={90}>Last 90 days</option>
+            <option value={365}>Last 12 months</option>
           </select>
         </div>
       </div>
@@ -199,10 +199,12 @@ export default function AnalyticsView() {
           {/* Follower growth chart */}
           <ChartCard title={`FOLLOWER GROWTH — LAST ${dateRange} DAYS`}>
             <SparkLine
-              data={profile.map(d => d.followers_count || 0)}
-              color="var(--accent)"
-              height={80}
+              data={profile.map(d => Number(d.net_followers) || 0)}
+              xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
+              color="var(--orange)"
+              height={120}
               fill={true}
+              valueFormatter={v => fmtNum(v)}
             />
             <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
               <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
@@ -214,17 +216,29 @@ export default function AnalyticsView() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <ChartCard title="DAILY VIDEO VIEWS">
               <SparkLine
-                data={profile.map(d => d.video_views || 0)}
+                data={profile.map(d => Number(d.video_views) || 0)}
+                xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
                 color="var(--blue)"
                 height={70}
+                valueFormatter={v => fmtNum(v)}
               />
+              <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
+                <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
+              </div>
             </ChartCard>
             <ChartCard title="DAILY LIKES">
               <SparkLine
-                data={profile.map(d => d.likes || 0)}
+                data={profile.map(d => Number(d.likes) || 0)}
+                xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
                 color="var(--purple)"
                 height={70}
+                valueFormatter={v => fmtNum(v)}
               />
+              <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
+                <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
+              </div>
             </ChartCard>
           </div>
 
@@ -236,20 +250,7 @@ export default function AnalyticsView() {
               {genderAvg.length === 0 ? (
                 <div className="text-muted text-sm">No data yet</div>
               ) : (
-                <div className="flex items-center gap-16">
-                  <DonutChart segments={genderAvg} size={80} />
-                  <div style={{ flex: 1 }}>
-                    {genderAvg.map(g => (
-                      <div key={g.label} className="flex items-center justify-between" style={{ fontSize: 12, marginBottom: 6 }}>
-                        <div className="flex items-center gap-6">
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: g.color }} />
-                          <span>{g.label}</span>
-                        </div>
-                        <span style={{ color: 'var(--text-muted)' }}>{g.value}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <DonutChart segments={genderAvg} size={160} />
               )}
             </ChartCard>
 
@@ -275,8 +276,8 @@ export default function AnalyticsView() {
             <ChartCard title={`PEAK POSTING HOURS · Best: ${peakHour.label}`}>
               <BarChart
                 data={hourlyAvg}
-                color="var(--accent)"
-                height={90}
+                color="var(--orange)"
+                height={180}
                 valueFormatter={v => v.toFixed(2)}
               />
             </ChartCard>
@@ -331,13 +332,13 @@ function CampaignPerformanceTable({ campaignStats }) {
                     </a>
                   ) : '—'}
                 </td>
-                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
+                <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
                 <td>{fmtNum(d.likes)}</td>
                 <td>{fmtNum(d.comments)}</td>
                 <td>{fmtNum(d.shares)}</td>
                 <td>
                   {d.engagement_rate != null ? (
-                    <span style={{ color: d.engagement_rate > 5 ? 'var(--green)' : d.engagement_rate > 2 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                    <span style={{ color: d.engagement_rate > 5 ? 'var(--green)' : d.engagement_rate > 2 ? 'var(--orange)' : 'var(--text-muted)' }}>
                       {d.engagement_rate}%
                     </span>
                   ) : '—'}
@@ -389,7 +390,7 @@ function TopVideosTable({ videos }) {
                     </div>
                   )}
                 </td>
-                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
+                <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
                 <td>{fmtNum(v.total_like)}</td>
                 <td>{fmtNum(v.total_comment)}</td>
                 <td>{fmtNum(v.total_share)}</td>

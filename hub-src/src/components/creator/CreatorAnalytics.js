@@ -32,22 +32,18 @@ export default function CreatorAnalytics() {
     const username = account.tiktok_username;
 
     const [profileRes, genderRes, countryRes, videoRes, campaignRes] = await Promise.all([
-      supabase.from('tiktok_profile_insights')
+      supabase.from('tiktok_profile_insights_view')
         .select('*')
         .eq('tiktok_username', username)
         .gte('date', since)
         .order('date', { ascending: true }),
-      supabase.from('tiktok_audience_gender')
+      supabase.from('tiktok_audience_gender_view')
         .select('*')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: false })
-        .limit(10),
-      supabase.from('tiktok_audience_country')
+        .eq('tiktok_username', username),
+      supabase.from('tiktok_audience_country_view')
         .select('*')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: false })
-        .limit(30),
-      supabase.from('tiktok_video_insights')
+        .eq('tiktok_username', username),
+      supabase.from('tiktok_video_insights_view')
         .select('*')
         .eq('tiktok_username', username)
         .order('total_play', { ascending: false })
@@ -98,7 +94,7 @@ export default function CreatorAnalytics() {
   const genderMap = {};
   data?.gender?.forEach(g => {
     if (!genderMap[g.gender]) genderMap[g.gender] = [];
-    genderMap[g.gender].push(g.percentage);
+    genderMap[g.gender].push(g.percentage * 100);
   });
   const genderAvg = Object.entries(genderMap).map(([k, vals]) => ({
     label: k,
@@ -106,11 +102,10 @@ export default function CreatorAnalytics() {
   }));
 
   // Countries
-  const latestDate = data?.country?.[0]?.date;
-  const topCountries = (data?.country || [])
-    .filter(c => c.date === latestDate)
+  const topCountries = [...(data?.country || [])]
     .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
-    .slice(0, 6);
+    .slice(0, 6)
+    .map(c => ({ ...c, percentage: Math.round((c.percentage || 0) * 100 * 10) / 10 }));
   const maxPct = Math.max(...topCountries.map(c => c.percentage || 0), 1);
 
   return (
@@ -153,7 +148,7 @@ export default function CreatorAnalytics() {
           </div>
 
           <ChartCard title={`FOLLOWER GROWTH — LAST ${dateRange} DAYS`}>
-            <SparkLine data={profileData.map(d => d.followers_count || 0)} color="var(--accent)" height={80} />
+            <SparkLine data={profileData.map(d => d.net_followers || 0)} color="var(--orange)" height={80} />
             <div className="flex mt-8" style={{ fontSize: 11, color: 'var(--text-dim)', justifyContent: 'space-between' }}>
               <span>{earliest && format(parseISO(earliest.date), 'MMM d')}</span>
               <span>{latest && format(parseISO(latest.date), 'MMM d')}</span>
@@ -169,7 +164,7 @@ export default function CreatorAnalytics() {
               {genderAvg.map(g => (
                 <div key={g.label} className="flex items-center justify-between mb-8" style={{ fontSize: 13 }}>
                   <span>{g.label}</span>
-                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{g.value}%</span>
+                  <span style={{ color: 'var(--orange)', fontWeight: 600 }}>{g.value}%</span>
                 </div>
               ))}
             </ChartCard>
@@ -209,7 +204,7 @@ export default function CreatorAnalytics() {
                           <div style={{ fontWeight: 500 }}>{d.campaign?.campaign_name}</div>
                           <div className="text-muted text-xs">{d.campaign?.brand_name}</div>
                         </td>
-                        <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
+                        <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
                         <td>{fmtNum(d.likes)}</td>
                         <td>{d.engagement_rate != null ? `${d.engagement_rate}%` : '—'}</td>
                         <td>{fmtSecs(d.average_time_watched)}</td>
@@ -239,7 +234,7 @@ export default function CreatorAnalytics() {
                           </div>
                           {v.create_time && <div className="text-muted text-xs">{format(new Date(v.create_time), 'MMM d')}</div>}
                         </td>
-                        <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
+                        <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
                         <td>{fmtNum(v.total_like)}</td>
                         <td>{fmtNum(v.total_comment)}</td>
                         <td>{fmtNum(v.total_share)}</td>

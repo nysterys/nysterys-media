@@ -25,7 +25,7 @@ export default function CampaignsView() {
   async function fetchAll() {
     const [c, a, cr, p, dt] = await Promise.all([
       supabase.from('campaigns').select(`
-        *, agency:agencies(name), creator:profiles(full_name, creator_name),
+        *, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
         campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name),
           revision_rounds(* , submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name))),
         invoices(*)

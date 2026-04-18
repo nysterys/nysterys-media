@@ -11,12 +11,6 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
-    flowType: 'pkce',         // PKCE flow — more secure than implicit for SPAs
-  },
-  global: {
-    headers: {
-      'X-Client-Info': 'nysterys-creator-hub',
-    },
+    detectSessionInUrl: false,
   },
 });
