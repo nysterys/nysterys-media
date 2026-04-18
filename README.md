@@ -33,11 +33,9 @@ GitHub Pages serves directly from the repo root, so the public site files (`inde
 ├── package.json
 └── .env.example
 
-/schemas/             → Supabase SQL files (run in order)
-├── 01-schema.sql
-├── 02-schema-tiktok.sql
-├── 03-schema-payouts.sql
-└── 04-schema-security.sql
+/schemas/             → Supabase SQL files
+├── SCHEMA.sql        ← USE THIS for fresh DB setup (consolidated, single file)
+└── 01-15-*.sql       ← Historical migration steps (reference only, do not re-run)
 
 /docs/                → Setup and reference documentation
 ├── 01-setup.md       ← START HERE
@@ -49,4 +47,5 @@ GitHub Pages serves directly from the repo root, so the public site files (`inde
 
 ## Quick start
 
-Start with [docs/01-setup.md](docs/01-setup.md).
+For a fresh Claude session or full rebuild, start with [docs/00-master-reference.md](docs/00-master-reference.md).
+For initial setup, see [docs/01-setup.md](docs/01-setup.md).
