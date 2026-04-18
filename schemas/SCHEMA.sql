@@ -216,6 +216,18 @@ create policy "Creators see own campaigns" on public.campaigns
 create policy "Admin can manage all campaigns" on public.campaigns
   for all using (public.get_my_role() = 'admin');
 
+create policy "Creators can mark own campaigns complete" on public.campaigns
+  for update
+  using (
+    public.get_my_role() = 'creator'
+    and creator_profile_id = auth.uid()
+  )
+  with check (
+    public.get_my_role() = 'creator'
+    and creator_profile_id = auth.uid()
+    and status = 'Completed'
+  );
+
 create trigger handle_updated_at before update on public.campaigns
   for each row execute function public.handle_updated_at();
 

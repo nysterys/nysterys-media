@@ -296,7 +296,8 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
 
   async function markComplete() {
     if (!window.confirm('Mark this campaign as Completed?')) return;
-    await supabase.from('campaigns').update({ status: 'Completed' }).eq('id', c.id);
+    const { error } = await supabase.from('campaigns').update({ status: 'Completed' }).eq('id', c.id);
+    if (error) { alert('Could not mark complete: ' + error.message); return; }
     onUpdated();
   }
 
