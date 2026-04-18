@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { isValidEmail } from '../../utils/format';
 
 export default function AgenciesView() {
   const [agencies, setAgencies] = useState([]);
@@ -87,9 +88,15 @@ function AgencyModal({ agency, onClose, onSaved }) {
     notes: agency?.notes || '',
   });
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   async function save() {
+    const errors = [];
+    if (!form.name.trim()) errors.push('Agency name is required.');
+    if (form.email && !isValidEmail(form.email)) errors.push('Email address is not valid.');
+    if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
+    setError('');
     if (agency) {
       await supabase.from('agencies').update(form).eq('id', agency.id);
     } else {
@@ -107,6 +114,7 @@ function AgencyModal({ agency, onClose, onSaved }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
+          {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
           <div className="form-group">
             <label className="form-label">Agency / Label Name *</label>
             <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="YTK Media" />

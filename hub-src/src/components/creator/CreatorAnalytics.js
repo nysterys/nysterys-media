@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { SparkLine, HBar, StatTile, ChartCard, fmtNum, fmtSecs, fmtPct } from '../shared/Charts';
+import { fmtDate } from '../../utils/format';
 import { format, parseISO, subDays } from 'date-fns';
 
 export default function CreatorAnalytics() {
@@ -232,7 +233,7 @@ export default function CreatorAnalytics() {
                           <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {v.video_title || v.video_id}
                           </div>
-                          {v.create_time && <div className="text-muted text-xs">{format(new Date(v.create_time), 'MMM d')}</div>}
+                          {v.create_time && <div className="text-muted text-xs">{fmtDate(v.create_time, 'MMM d')}</div>}
                         </td>
                         <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
                         <td>{fmtNum(v.total_like)}</td>

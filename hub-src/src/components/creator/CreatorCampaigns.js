@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
-import { format, parseISO } from 'date-fns';
+import { fmtDate } from '../../utils/format';
 
 export default function CreatorCampaigns() {
   const { profile } = useAuth();
@@ -32,7 +32,7 @@ export default function CreatorCampaigns() {
     setLoading(false);
   }
 
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
 
   const STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
@@ -139,7 +139,7 @@ export default function CreatorCampaigns() {
 // ============================================================
 function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
   const c = campaign;
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
   const inv = c.invoices?.[0];
 
@@ -259,7 +259,7 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
 function CreatorDeliverablesTab({ campaign, onUpdated }) {
   const [showSubmitDraft, setShowSubmitDraft] = useState(null);
   const [showMarkPosted, setShowMarkPosted] = useState(null);
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  
 
   return (
     <div>

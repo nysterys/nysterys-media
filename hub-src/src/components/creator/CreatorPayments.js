@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-
-const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
-const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+import { fmtDate, fmtMoney, fmtMonth, extractMonths } from '../../utils/format';
 
 function PayoutBadge({ status }) {
   const map = { 'Pending': 'badge-not-invoiced', 'Partial': 'badge-pending', 'Paid': 'badge-paid', 'On Hold': 'badge-overdue' };
@@ -37,7 +34,7 @@ export default function CreatorPayments() {
     setLoading(false);
   }
 
-  const months = [...new Set(rows.filter(r => r.invoice_date).map(r => r.invoice_date.slice(0, 7)))].sort().reverse();
+  const months = extractMonths(rows, 'invoice_date');
 
   const filtered = rows.filter(r => {
     if (payoutFilter !== 'all' && (r.payout_status || 'Pending') !== payoutFilter) return false;
@@ -65,7 +62,7 @@ export default function CreatorPayments() {
           {months.length > 0 && (
             <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
               <option value="all">All time</option>
-              {months.map(m => <option key={m} value={m}>{format(new Date(m + '-01'), 'MMMM yyyy')}</option>)}
+              {months.map(m => <option key={m} value={m}>{fmtMonth(m)}</option>)}
             </select>
           )}
         </div>
@@ -75,7 +72,7 @@ export default function CreatorPayments() {
       <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         <div className="stat-card">
           <div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(monthContracted)}</div>
-          <div className="stat-label">{monthFilter !== 'all' ? format(new Date(monthFilter + '-01'), 'MMMM') : 'All Time'} Contracted</div>
+          <div className="stat-label">{monthFilter !== 'all' ? fmtMonth(monthFilter).split(' ')[0] : 'All Time'} Contracted</div>
         </div>
         <div className="stat-card">
           <div className="stat-value stat-green" style={{ fontSize: 22 }}>{fmtMoney(monthPaidOut)}</div>

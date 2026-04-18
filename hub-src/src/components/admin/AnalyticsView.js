@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { SparkLine, BarChart, HBar, DonutChart, StatTile, ChartCard, fmtNum, fmtSecs, fmtPct } from '../shared/Charts';
 import { format, parseISO, subDays } from 'date-fns';
+import { fmtDate } from '../../utils/format';
 
 function openPopup(url) {
   if (!url) return;
@@ -516,7 +517,7 @@ function TopVideosTable({ videos }) {
                     </div>
                     {v.create_time && (
                       <div className="text-muted text-xs">
-                        {format(new Date(v.create_time), 'MMM d, yyyy')}
+                        {fmtDate(v.create_time)}
                       </div>
                     )}
                   </td>

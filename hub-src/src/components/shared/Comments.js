@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { format } from 'date-fns';
+import { fmtDate } from '../../utils/format';
 
 export default function Comments({ campaignId }) {
   const { profile } = useAuth();
@@ -54,7 +54,7 @@ export default function Comments({ campaignId }) {
             <div className="comment-meta">
               <strong>{c.author?.full_name || 'Unknown'}</strong>
               {' · '}
-              {format(new Date(c.created_at), 'MMM d, h:mm a')}
+              {fmtDate(c.created_at, 'MMM d, h:mm a')}
             </div>
             <div className="comment-text">{c.body}</div>
           </div>

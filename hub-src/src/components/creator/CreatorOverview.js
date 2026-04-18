@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
+import { fmtDate } from '../../utils/format';
 import { format, parseISO, isPast, isWithinInterval, addDays } from 'date-fns';
 
 export default function CreatorOverview({ setActiveView }) {
@@ -25,7 +26,7 @@ export default function CreatorOverview({ setActiveView }) {
     setLoading(false);
   }
 
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  
 
   const active = campaigns.filter(c => c.status === 'Active');
   const upcoming = campaigns.filter(c => c.status === 'Confirmed');

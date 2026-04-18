@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
 import { format, parseISO } from 'date-fns';
+import { fmtDate as safeFmtDate, isValidDateString, isValidNumber, isValidUrl } from '../../utils/format';
 
 const CAMPAIGN_STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
 const PAYMENT_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed', 'In Kind'];
@@ -273,7 +274,7 @@ export default function CampaignsView() {
   async function openDetail(c) { setSelectedCampaign(c); setDetailTab('deliverables'); }
   function closeDetail() { setSelectedCampaign(null); }
 
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  const fmtDate = safeFmtDate;
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
 
   // Close column filter dropdowns on outside click
@@ -501,10 +502,13 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
   function removeD(i) { setDeliverables(d => d.filter((_, idx) => idx !== i)); }
 
   async function save() {
-    if (!form.campaign_name.trim() || !form.brand_name.trim()) {
-      setError('Campaign name and brand name are required.');
-      return;
-    }
+    const errors = [];
+    if (!form.campaign_name.trim() || !form.brand_name.trim()) errors.push('Campaign name and brand name are required.');
+    if (form.deal_signed_date && !isValidDateString(form.deal_signed_date)) errors.push('Deal signed date is not a valid date.');
+    if (form.campaign_start_date && !isValidDateString(form.campaign_start_date)) errors.push('Campaign start date is not a valid date.');
+    if (form.campaign_end_date && !isValidDateString(form.campaign_end_date)) errors.push('Campaign end date is not a valid date.');
+    if (form.contracted_rate && !isValidNumber(form.contracted_rate)) errors.push('Contracted rate must be a number.');
+    if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
 
@@ -710,7 +714,7 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
 
   useEffect(() => { setC(campaign); }, [campaign]);
 
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  const fmtDate = safeFmtDate;
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
 
   async function updateCampaignStatus(status) {
@@ -854,10 +858,14 @@ function DetailsTab({ campaign, agencies, creators, onUpdated }) {
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setSaved(false); }
 
   async function save() {
-    if (!form.campaign_name.trim() || !form.brand_name.trim()) {
-      setError('Campaign name and brand name are required.');
-      return;
-    }
+    const errors = [];
+    if (!form.campaign_name.trim() || !form.brand_name.trim()) errors.push('Campaign name and brand name are required.');
+    if (form.deal_signed_date && !isValidDateString(form.deal_signed_date)) errors.push('Deal signed date is not a valid date.');
+    if (form.campaign_start_date && !isValidDateString(form.campaign_start_date)) errors.push('Campaign start is not a valid date.');
+    if (form.campaign_end_date && !isValidDateString(form.campaign_end_date)) errors.push('Campaign end is not a valid date.');
+    if (form.contracted_rate !== '' && !isValidNumber(form.contracted_rate)) errors.push('Contracted rate must be a number.');
+    if (form.rush_premium !== '' && !isValidNumber(form.rush_premium)) errors.push('Rush premium must be a number.');
+    if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
     const { error: err } = await supabase.from('campaigns').update({
@@ -1008,10 +1016,14 @@ function EditCampaignModal({ campaign, agencies, creators, onClose, onSaved }) {
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
   async function save() {
-    if (!form.campaign_name.trim() || !form.brand_name.trim()) {
-      setError('Campaign name and brand name are required.');
-      return;
-    }
+    const errors = [];
+    if (!form.campaign_name.trim() || !form.brand_name.trim()) errors.push('Campaign name and brand name are required.');
+    if (form.deal_signed_date && !isValidDateString(form.deal_signed_date)) errors.push('Deal signed date is not a valid date.');
+    if (form.campaign_start_date && !isValidDateString(form.campaign_start_date)) errors.push('Campaign start is not a valid date.');
+    if (form.campaign_end_date && !isValidDateString(form.campaign_end_date)) errors.push('Campaign end is not a valid date.');
+    if (form.contracted_rate !== '' && !isValidNumber(form.contracted_rate)) errors.push('Contracted rate must be a number.');
+    if (form.rush_premium !== '' && !isValidNumber(form.rush_premium)) errors.push('Rush premium must be a number.');
+    if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
     const { error: err } = await supabase.from('campaigns').update({
@@ -1147,7 +1159,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
   const [editingRevision, setEditingRevision] = useState(null);
   const [expanding, setExpanding] = useState(null);
 
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  const fmtDate = safeFmtDate;
 
   const deliverables = campaign.campaign_deliverables || [];
   const totalSlots = deliverables.reduce((sum, d) => sum + (d.quantity || 1), 0);
@@ -1399,6 +1411,11 @@ function EditRevisionModal({ revision, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    const errors = [];
+    if (form.submitted_at && !isValidDateString(form.submitted_at)) errors.push('Submitted date is not a valid date.');
+    if (form.agency_response_date && !isValidDateString(form.agency_response_date)) errors.push('Agency response date is not a valid date.');
+    if (form.draft_url && !isValidUrl(form.draft_url)) errors.push('Draft URL is not a valid URL.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     await supabase.from('revision_rounds').update({
       round_number: parseInt(form.round_number) || revision.round_number,
@@ -1601,6 +1618,12 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    const errors = [];
+    if (form.contracted_post_date && !isValidDateString(form.contracted_post_date)) errors.push('Contracted post date is not a valid date.');
+    if (form.actual_post_date && !isValidDateString(form.actual_post_date)) errors.push('Actual post date is not a valid date.');
+    if (form.post_url && !isValidUrl(form.post_url)) errors.push('Post URL is not a valid URL.');
+    if (form.music_url && !isValidUrl(form.music_url)) errors.push('Music URL is not a valid URL.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const update = {
       platform_id: form.platform_id || null,
@@ -1747,7 +1770,7 @@ async function getDownloadUrl(bucket, path) {
 
 function InvoiceTab({ campaign, onUpdated }) {
   const inv = campaign.invoices?.[0];
-  const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+  const fmtDate = safeFmtDate;
   const [form, setForm] = useState({
     invoice_number: inv?.invoice_number || '',
     invoice_date: inv?.invoice_date || '',
@@ -1769,6 +1792,12 @@ function InvoiceTab({ campaign, onUpdated }) {
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setSaved(false); }
 
   async function save() {
+    const errors = [];
+    if (form.invoice_date && !isValidDateString(form.invoice_date)) errors.push('Invoice date is not a valid date.');
+    if (form.payment_received_date && !isValidDateString(form.payment_received_date)) errors.push('Payment received date is not a valid date.');
+    if (form.invoice_amount && !isValidNumber(form.invoice_amount)) errors.push('Invoice amount must be a number.');
+    if (form.in_kind_value && !isValidNumber(form.in_kind_value)) errors.push('In-kind value must be a number.');
+    if (errors.length) { setSaved(false); alert(errors.join('\n')); return; }
     setSaving(true);
     const payload = {
       invoice_number: form.invoice_number || null,
@@ -2095,6 +2124,10 @@ function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose,
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    const errors = [];
+    if (form.contracted_post_date && !isValidDateString(form.contracted_post_date)) errors.push('Contracted post date is not a valid date.');
+    if (form.music_url && !isValidUrl(form.music_url)) errors.push('Music URL is not a valid URL.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const qty = parseInt(form.quantity) || 1;
     const rows = Array.from({ length: qty }, () => ({
@@ -2181,6 +2214,11 @@ export function AddRevisionModal({ deliverable, onClose, onSaved, isAdmin = fals
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    const errors = [];
+    if (form.submitted_at && !isValidDateString(form.submitted_at)) errors.push('Submitted date is not a valid date.');
+    if (form.agency_response_date && !isValidDateString(form.agency_response_date)) errors.push('Agency response date is not a valid date.');
+    if (form.draft_url && !isValidUrl(form.draft_url)) errors.push('Draft URL is not a valid URL.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('revision_rounds').insert({
@@ -2261,6 +2299,10 @@ export function MarkPostedModal({ deliverable, campaign, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    const errors = [];
+    if (postDate && !isValidDateString(postDate)) errors.push('Post date is not a valid date.');
+    if (postUrl && !isValidUrl(postUrl)) errors.push('Post URL is not a valid URL.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     await supabase.from('campaign_deliverables').update({

@@ -1,21 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
-import { format, parseISO } from 'date-fns';
+import { fmtDate, fmtMoney, fmtMonth, extractMonths, isValidDateString, isValidNumber, isValidUrl } from '../../utils/format';
 
 const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'];
 const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold'];
 const SPLIT_STATUSES = ['Pending', 'Sent', 'Cleared', 'Failed'];
-
-const fmtDate = (d) => {
-  if (!d) return '—';
-  try {
-    const parsed = parseISO(d);
-    if (isNaN(parsed.getTime())) return '—';
-    return format(parsed, 'MMM d, yyyy');
-  } catch { return '—'; }
-};
-const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
 function openPopup(url) {
   if (!url) return;
@@ -57,11 +47,7 @@ export default function PaymentsView() {
     setLoading(false);
   }
 
-  const months = [...new Set(
-    rows
-      .filter(r => r.invoice_date && /^\d{4}-\d{2}/.test(r.invoice_date))
-      .map(r => r.invoice_date.slice(0, 7))
-  )].sort().reverse();
+  const months = extractMonths(rows, 'invoice_date');
 
   const filtered = rows.filter(r => {
     if (agencyFilter !== 'all' && r.agency_payment_status !== agencyFilter) return false;
@@ -115,7 +101,7 @@ export default function PaymentsView() {
         {months.length > 0 && (
           <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
             <option value="all">All months</option>
-            {months.map(m => <option key={m} value={m}>{format(parseISO(m + '-01'), 'MMMM yyyy')}</option>)}
+            {months.map(m => <option key={m} value={m}>{fmtMonth(m)}</option>)}
           </select>
         )}
       </div>
@@ -259,6 +245,14 @@ function InvoiceForm({ invoice, row, onUpdated }) {
     ? parseFloat(form.amount_received) - parseFloat(form.invoice_amount) : null;
 
   async function save() {
+    const errors = [];
+    if (form.invoice_date && !isValidDateString(form.invoice_date)) errors.push('Invoice date is not a valid date.');
+    if (form.payment_received_date && !isValidDateString(form.payment_received_date)) errors.push('Agency paid date is not a valid date.');
+    if (form.you_received_date && !isValidDateString(form.you_received_date)) errors.push('Date cleared is not a valid date.');
+    if (form.invoice_amount !== '' && !isValidNumber(form.invoice_amount)) errors.push('Invoice amount must be a number.');
+    if (form.amount_received !== '' && !isValidNumber(form.amount_received)) errors.push('Amount received must be a number.');
+    if (form.processing_fee !== '' && !isValidNumber(form.processing_fee)) errors.push('Processing fee must be a number.');
+    if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const payload = {
       invoice_number: form.invoice_number || null,
@@ -671,4 +665,3 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
     </div>
   );
 }
-
