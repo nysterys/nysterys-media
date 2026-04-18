@@ -553,6 +553,7 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
           id: s.id,
           destination_id: s.destination_id || '',
           percentage: String(s.percentage ?? ''),
+          amount_override: s.amount != null ? String(s.amount) : '',
           split_status: s.split_status || 'Pending',
           sent_date: s.sent_date || '',
           cleared_date: s.cleared_date || '',
@@ -604,7 +605,9 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
     if (!payoutId) { setError('Failed to save payout record.'); setSaving(false); return; }
 
     for (const sf of splitForms) {
-      const amt = payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null;
+      const amt = sf.amount_override !== undefined && sf.amount_override !== ''
+        ? parseFloat(parseFloat(sf.amount_override).toFixed(2))
+        : payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null;
       const sp = {
         payout_id: payoutId,
         destination_id: sf.destination_id,
@@ -723,13 +726,35 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
               </select>
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Percentage</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input className="form-input" type="number" min="0" max="100" step="0.5" value={sf.percentage}
-                  onChange={e => setSF(i, 'percentage', e.target.value)} style={{ width: 72 }} />
-                <span style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap' }}>
-                  = {computedAmount(sf.percentage)}
-                </span>
+              <label className="form-label">Percentage / Amount</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  className="form-input"
+                  type="number" min="0" max="100" step="0.01"
+                  value={sf.percentage}
+                  onChange={e => {
+                    const pct = e.target.value;
+                    const amt = payoutAmt && pct !== '' ? (payoutAmt * parseFloat(pct) / 100).toFixed(2) : '';
+                    setSF(i, 'percentage', pct);
+                    setSF(i, 'amount_override', amt);
+                  }}
+                  style={{ width: 72 }}
+                  placeholder="%"
+                />
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>%  =</span>
+                <input
+                  className="form-input"
+                  type="number" min="0" step="0.01"
+                  value={sf.amount_override ?? (payoutAmt && sf.percentage ? (payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2) : '')}
+                  onChange={e => {
+                    const amt = e.target.value;
+                    const pct = payoutAmt && amt !== '' ? ((parseFloat(amt) / payoutAmt) * 100).toFixed(4) : '';
+                    setSF(i, 'amount_override', amt);
+                    setSF(i, 'percentage', pct);
+                  }}
+                  style={{ width: 90 }}
+                  placeholder="$0.00"
+                />
               </div>
             </div>
           </div>
