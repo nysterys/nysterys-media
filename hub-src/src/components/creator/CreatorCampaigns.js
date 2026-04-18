@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
 import { fmtDate, fmtMoney } from '../../utils/format';
+import { format, parseISO } from 'date-fns';
 
 function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
@@ -426,6 +427,7 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
 function CreatorDeliverablesTab({ campaign, onUpdated }) {
   const [showSubmitDraft, setShowSubmitDraft] = useState(null);
   const [showMarkPosted, setShowMarkPosted] = useState(null);
+  const [showLinkVideo, setShowLinkVideo] = useState(null);
   
 
   return (
@@ -544,6 +546,9 @@ function CreatorDeliverablesTab({ campaign, onUpdated }) {
               {canSubmitDraft && (
                 <button className="btn btn-primary btn-sm" onClick={() => setShowSubmitDraft(d)}>Submit Draft</button>
               )}
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowLinkVideo(d)}>
+                {d.post_url ? 'Change Video' : 'Link Posted Video'}
+              </button>
               {(d.draft_status === 'Approved' || d.draft_status === 'Posted') && !d.post_url && (
                 <button className="btn btn-secondary btn-sm" onClick={() => setShowMarkPosted(d)}>Add Post URL</button>
               )}
@@ -568,6 +573,15 @@ function CreatorDeliverablesTab({ campaign, onUpdated }) {
           deliverable={showMarkPosted}
           onClose={() => setShowMarkPosted(null)}
           onSaved={() => { setShowMarkPosted(null); onUpdated(); }}
+        />
+      )}
+
+      {showLinkVideo && (
+        <CreatorLinkVideoModal
+          deliverable={showLinkVideo}
+          campaign={campaign}
+          onClose={() => setShowLinkVideo(null)}
+          onSaved={() => { setShowLinkVideo(null); onUpdated(); }}
         />
       )}
     </div>
@@ -708,6 +722,171 @@ function CreatorMarkPostedModal({ deliverable, onClose, onSaved }) {
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={save} disabled={saving || !postUrl}>
             {saving ? 'Saving...' : 'Save Post URL'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Video Picker — same logic as admin, scoped to creator's account
+// ============================================================
+function VideoPickerSelect({ campaign, currentPostUrl, onSelect }) {
+  const { profile } = useAuth();
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { loadVideos(); }, []);
+
+  async function loadVideos() {
+    setLoading(true);
+    const { data: acct } = await supabase
+      .from('tiktok_accounts')
+      .select('tiktok_username')
+      .eq('profile_id', profile.id)
+      .eq('is_active', true)
+      .single();
+
+    if (!acct?.tiktok_username) { setLoading(false); return; }
+
+    let query = supabase
+      .from('tiktok_video_insights_view')
+      .select('video_id, video_title, create_time, share_url')
+      .eq('tiktok_username', acct.tiktok_username)
+      .order('create_time', { ascending: false });
+
+    if (campaign.campaign_start_date) query = query.gte('create_time', campaign.campaign_start_date);
+    if (campaign.campaign_end_date) {
+      const end = new Date(campaign.campaign_end_date);
+      end.setDate(end.getDate() + 1);
+      query = query.lte('create_time', end.toISOString().split('T')[0]);
+    }
+
+    const { data: allVideos } = await query;
+
+    const { data: usedRows } = await supabase
+      .from('campaign_deliverables')
+      .select('post_url')
+      .neq('campaign_id', campaign.id)
+      .not('post_url', 'is', null);
+
+    const usedUrls = new Set((usedRows || []).map(r => r.post_url));
+
+    const available = (allVideos || []).filter(v => {
+      if (currentPostUrl && currentPostUrl.includes(v.video_id)) return true;
+      return ![...usedUrls].some(url => url && url.includes(v.video_id));
+    });
+
+    setVideos(available);
+    setLoading(false);
+  }
+
+  const fmtD = (d) => {
+    if (!d) return '';
+    try { return format(parseISO(d.includes('T') ? d : d + 'T00:00:00'), 'MMM d'); }
+    catch { return d; }
+  };
+
+  const currentVideoId = videos.find(v => currentPostUrl?.includes(v.video_id))?.video_id || '';
+
+  function handleChange(e) {
+    const videoId = e.target.value;
+    if (!videoId) { onSelect('', ''); return; }
+    const video = videos.find(v => v.video_id === videoId);
+    if (!video) return;
+    const url = video.share_url || `https://www.tiktok.com/video/${video.video_id}`;
+    const postDate = video.create_time
+      ? (video.create_time.includes('T') ? video.create_time.split('T')[0] : video.create_time)
+      : '';
+    onSelect(url, postDate);
+  }
+
+  if (loading) return <div className="text-muted text-sm" style={{ padding: '8px 0' }}>Loading your videos...</div>;
+  if (videos.length === 0) return (
+    <div className="text-muted text-sm" style={{ padding: '8px 0' }}>
+      No unassigned videos found within the campaign date window.
+      {!campaign.campaign_start_date && !campaign.campaign_end_date && ' (No campaign dates set — showing all videos.)'}
+    </div>
+  );
+
+  return (
+    <select className="form-select" value={currentVideoId} onChange={handleChange}>
+      <option value="">— Select a video —</option>
+      {videos.map(v => (
+        <option key={v.video_id} value={v.video_id}>
+          {fmtD(v.create_time)} · {v.video_title ? (v.video_title.length > 60 ? v.video_title.slice(0, 60) + '…' : v.video_title) : v.video_id}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ============================================================
+// Creator Link Video Modal
+// ============================================================
+function CreatorLinkVideoModal({ deliverable, campaign, onClose, onSaved }) {
+  const [postUrl, setPostUrl] = useState(deliverable.post_url || '');
+  const [postDate, setPostDate] = useState(deliverable.actual_post_date || '');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!postUrl) return;
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('campaign_deliverables').update({
+      post_url: postUrl || null,
+      actual_post_date: postDate || null,
+      draft_status: 'Posted',
+      posted_by: user?.id || null,
+      posted_at: new Date().toISOString(),
+    }).eq('id', deliverable.id);
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <div className="modal-title" style={{ fontSize: 16 }}>LINK POSTED VIDEO</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text)' }}>{deliverable.platform?.name}</strong>
+            {deliverable.deliverable_type?.name ? ` · ${deliverable.deliverable_type.name}` : ''}
+            {deliverable.deliverable_details && (
+              <div style={{ marginTop: 4, fontSize: 12 }}>{deliverable.deliverable_details}</div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Select from your TikTok videos</label>
+            <VideoPickerSelect
+              campaign={campaign}
+              currentPostUrl={postUrl}
+              onSelect={(url, date) => {
+                setPostUrl(url);
+                if (date) setPostDate(date);
+              }}
+            />
+          </div>
+          {postUrl && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{postUrl}</span>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--red, #e74c3c)' }}
+                onClick={() => { setPostUrl(''); setPostDate(''); }}>Clear</button>
+            </div>
+          )}
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label className="form-label">Post Date</label>
+            <input className="form-input" type="date" value={postDate} onChange={e => setPostDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !postUrl}>
+            {saving ? 'Saving...' : 'Link Video & Mark Posted'}
           </button>
         </div>
       </div>
