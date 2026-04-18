@@ -64,12 +64,13 @@ export default function CreatorPayments() {
     return true;
   });
 
-  // Monthly summary for selected month or all time
-  const monthRows = monthFilter !== 'all' ? rows.filter(r => r.invoice_date?.startsWith(monthFilter)) : rows;
-  const monthContracted = monthRows.reduce((s, r) => s + (r.contracted_rate || 0), 0);
-  const monthPaidOut = monthRows.filter(r => r.payout_status === 'Paid' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.payout_amount || 0), 0);
-  const monthPending = monthRows.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.contracted_rate || 0), 0);
-  const monthCleared = monthRows.reduce((s, r) => s + (r.splits_cleared > 0 ? 1 : 0), 0);
+  // All 6 tiles use filtered rows so they respond to month filter
+  const totalContracted    = filtered.reduce((s, r) => s + (r.contracted_rate || 0), 0);
+  const totalAgencyPaid    = filtered.filter(r => !isInKind(r.payment_method) && r.agency_payment_status === 'Paid').reduce((s, r) => s + (r.invoice_amount || r.contracted_rate || 0), 0);
+  const totalPaidToMe      = filtered.filter(r => !isInKind(r.payment_method) && r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
+  const totalAgencyPending = filtered.filter(r => !isInKind(r.payment_method) && ['Not Invoiced', 'Invoiced', 'Pending'].includes(r.agency_payment_status)).reduce((s, r) => s + (r.contracted_rate || 0), 0);
+  const totalPayoutPending = filtered.filter(r => !isInKind(r.payment_method) && r.payout_status !== 'Paid' && r.payout_status !== 'N/A').reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
+  const totalInKind        = filtered.filter(r => isInKind(r.payment_method)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
@@ -91,19 +92,15 @@ export default function CreatorPayments() {
       </div>
 
       {/* Stats */}
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-        <div className="stat-card">
-          <div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(monthContracted)}</div>
-          <div className="stat-label">{monthFilter !== 'all' ? fmtMonth(monthFilter).split(' ')[0] : 'All Time'} Contracted</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value stat-green" style={{ fontSize: 22 }}>{fmtMoney(monthPaidOut)}</div>
-          <div className="stat-label">Paid to Me</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value stat-orange" style={{ fontSize: 22 }}>{fmtMoney(monthPending)}</div>
-          <div className="stat-label">Pending</div>
-        </div>
+      <div className="stats-row" style={{ gridTemplateColumns: `repeat(${totalInKind > 0 ? 6 : 5}, 1fr)` }}>
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Total Contracted</div></div>
+        <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(totalAgencyPaid)}</div><div className="stat-label">Agency Paid</div></div>
+        <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(totalPaidToMe)}</div><div className="stat-label">Paid to Me</div></div>
+        <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(totalAgencyPending)}</div><div className="stat-label">Agency Pending</div></div>
+        <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(totalPayoutPending)}</div><div className="stat-label">My Payout Pending</div></div>
+        {totalInKind > 0 && (
+          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
+        )}
       </div>
 
       {/* Payout filter */}
