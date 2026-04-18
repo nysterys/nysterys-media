@@ -336,9 +336,17 @@ function RewardInvoiceForm({ entry, onUpdated }) {
   }, [loading, invoice]);
 
   const [saving, setSaving] = useState(false);
-  const [receiptPath, setReceiptPath] = useState(invoice?.receipt_path || null);
-  const [receiptName, setReceiptName] = useState(invoice?.receipt_name || null);
+  const [receiptPath, setReceiptPath] = useState(null);
+  const [receiptName, setReceiptName] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // Sync receipt state whenever invoice reloads
+  useEffect(() => {
+    if (!loading && invoice) {
+      setReceiptPath(invoice.receipt_path || null);
+      setReceiptName(invoice.receipt_name || null);
+    }
+  }, [loading, invoice]);
 
   async function save() {
     if (!form) return;
@@ -365,8 +373,10 @@ function RewardInvoiceForm({ entry, onUpdated }) {
       await supabase.from('invoices').insert(payload);
     }
     setSaving(false);
+    // Reload local invoice first so the form reflects saved values,
+    // then notify parent (which triggers its own fetchDetail).
+    await loadInvoice();
     onUpdated();
-    loadInvoice();
   }
 
   async function uploadReceipt(file) {
