@@ -59,6 +59,11 @@ export default function CampaignsView() {
     setPlatforms(p.data || []);
     setDeliverableTypes(dt.data || []);
     setLoading(false);
+    // Keep the detail panel in sync — replace selectedCampaign with the fresh version
+    setSelectedCampaign(prev => {
+      if (!prev) return null;
+      return merged.find(camp => camp.id === prev.id) || prev;
+    });
   }
 
   function toggleSort(col) {
