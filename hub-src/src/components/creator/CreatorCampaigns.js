@@ -9,6 +9,14 @@ function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
+function openPopup(url) {
+  if (!url) return;
+  const w = 480, h = 720;
+  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
+}
+
 export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
@@ -43,7 +51,28 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
       `)
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false });
-    setCampaigns(data || []);
+
+    const campaigns = data || [];
+
+    // Fetch TikTok stats for all deliverables and merge by id
+    const allDeliverableIds = campaigns.flatMap(c => (c.campaign_deliverables || []).map(d => d.id));
+    let statsById = {};
+    if (allDeliverableIds.length > 0) {
+      const { data: statsRows } = await supabase
+        .from('campaign_deliverables_with_stats')
+        .select('id, cover_image_url, video_title, views, likes, comments, shares, engagement_rate, average_time_watched, full_video_watched_rate')
+        .in('id', allDeliverableIds);
+      (statsRows || []).forEach(s => { statsById[s.id] = s; });
+    }
+
+    // Merge stats into deliverables
+    campaigns.forEach(c => {
+      (c.campaign_deliverables || []).forEach(d => {
+        if (statsById[d.id]) Object.assign(d, statsById[d.id]);
+      });
+    });
+
+    setCampaigns(campaigns);
     setLoading(false);
   }
 
@@ -390,9 +419,7 @@ function CreatorDeliverablesTab({ campaign, onUpdated }) {
       )}
 
       {campaign.campaign_deliverables?.map(d => {
-        const latestRound = d.revision_rounds?.sort((a, b) => b.round_number - a.round_number)?.[0];
         const canSubmitDraft = d.draft_status !== 'Posted' && d.draft_status !== 'Approved';
-        const canMarkPosted = d.draft_status === 'Approved' || d.draft_status === 'Posted';
 
         return (
           <div key={d.id} className="deliverable-card">
@@ -411,89 +438,90 @@ function CreatorDeliverablesTab({ campaign, onUpdated }) {
               </div>
             )}
 
-            <div className="flex gap-16 mb-12" style={{ fontSize: 12 }}>
-              <div>
-                <span className="text-muted">Post due: </span>
-                <span style={{ fontWeight: 500 }}>{fmtDate(d.contracted_post_date)}</span>
+            {d.music_url && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12 }}>
+                <span style={{ fontSize: 14 }}>🎵</span>
+                <span className="text-muted">Music:</span>
+                <span className="link" style={{ cursor: 'pointer' }} onClick={() => openPopup(d.music_url)}>
+                  {d.music_url.length > 50 ? d.music_url.slice(0, 50) + '…' : d.music_url}
+                </span>
               </div>
-              {d.actual_post_date && (
-                <div>
-                  <span className="text-muted">Posted: </span>
-                  <span style={{ color: 'var(--green)' }}>{fmtDate(d.actual_post_date)}</span>
+            )}
+
+            {/* TikTok video thumbnail + stats */}
+            {d.cover_image_url && (
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+                <div onClick={() => openPopup(d.post_url)}
+                  style={{ flexShrink: 0, width: 72, height: 96, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', cursor: 'pointer' }}>
+                  <img src={d.cover_image_url} alt="thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {d.video_title && (
+                    <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, marginBottom: 4, wordBreak: 'break-word' }}>
+                      {d.video_title}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                    {d.views != null && <span>👁 {Number(d.views).toLocaleString()}</span>}
+                    {d.likes != null && <span>♥ {Number(d.likes).toLocaleString()}</span>}
+                    {d.comments != null && <span>💬 {Number(d.comments).toLocaleString()}</span>}
+                    {d.shares != null && <span>↗ {Number(d.shares).toLocaleString()}</span>}
+                    {d.engagement_rate != null && <span style={{ color: 'var(--orange)' }}>{d.engagement_rate}% ER</span>}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-16 mb-12" style={{ fontSize: 12 }}>
+              <div><span className="text-muted">Due: </span><span style={{ fontWeight: 500 }}>{fmtDate(d.contracted_post_date)}</span></div>
+              {d.actual_post_date && (
+                <div><span className="text-muted">Posted: </span><span style={{ color: 'var(--green)' }}>{fmtDate(d.actual_post_date)}</span></div>
+              )}
+              {d.post_url && (
+                <span className="link text-sm" style={{ cursor: 'pointer' }} onClick={() => openPopup(d.post_url)}>View Post ↗</span>
               )}
             </div>
 
-            {d.post_url && (
-              <div className="mb-12">
-                <a href={d.post_url} target="_blank" rel="noreferrer" className="link text-sm">
-                  View Live Post ↗
-                </a>
-              </div>
-            )}
-
-            {/* Revision history */}
-            {d.revision_rounds && d.revision_rounds.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-dim)', marginBottom: 8 }}>
-                  Draft History
-                </div>
-                {d.revision_rounds.sort((a, b) => a.round_number - b.round_number).map(r => (
-                  <div key={r.id} className="revision-round">
-                    <div className="revision-round-header">
-                      <span className="round-number">Round {r.round_number}</span>
-                      <Badge status={r.agency_decision} />
-                    </div>
-                    {r.submitted_at && (
-                      <div className="text-sm text-muted">Submitted {fmtDate(r.submitted_at?.split('T')[0])}</div>
-                    )}
-                    {r.draft_url && (
-                      <a href={r.draft_url} target="_blank" rel="noreferrer" className="link text-sm">
-                        View Draft ↗
-                      </a>
-                    )}
-                    {r.draft_notes && <div className="text-sm mt-4">{r.draft_notes}</div>}
-                    {r.agency_decision === 'Revisions Requested' && r.agency_feedback && (
-                      <div className="mt-8" style={{
-                        background: 'rgba(255,156,58,0.08)',
-                        border: '1px solid rgba(255,156,58,0.2)',
-                        padding: '8px 10px', borderRadius: 4, fontSize: 12
-                      }}>
-                        <div style={{ color: 'var(--orange)', fontWeight: 600, marginBottom: 4 }}>Feedback from agency:</div>
-                        {r.agency_feedback}
-                      </div>
-                    )}
-                    {r.agency_decision === 'Approved' && (
-                      <div className="mt-8" style={{
-                        background: 'rgba(200,245,100,0.08)',
-                        border: '1px solid rgba(200,245,100,0.2)',
-                        padding: '8px 10px', borderRadius: 4, fontSize: 12, color: 'var(--accent)'
-                      }}>
-                        ✓ Approved{r.agency_response_date ? ` on ${fmtDate(r.agency_response_date)}` : ''}
-                        {r.agency_feedback && <div style={{ color: 'var(--text)', marginTop: 4 }}>{r.agency_feedback}</div>}
-                      </div>
-                    )}
+            {/* Revision rounds */}
+            <div style={{ marginBottom: 10 }}>
+              <div className="detail-section-title" style={{ marginBottom: 8 }}>REVISION ROUNDS</div>
+              {(!d.revision_rounds || d.revision_rounds.length === 0) && (
+                <div className="text-muted text-sm">No drafts submitted yet.</div>
+              )}
+              {d.revision_rounds?.sort((a, b) => a.round_number - b.round_number).map(r => (
+                <div key={r.id} className="revision-round">
+                  <div className="revision-round-header">
+                    <span className="round-number">Round {r.round_number}</span>
+                    <Badge status={r.agency_decision} />
                   </div>
-                ))}
-              </div>
-            )}
+                  {r.submitted_at && <div className="text-sm text-muted">Submitted {fmtDate(r.submitted_at?.split('T')[0])}</div>}
+                  {r.draft_url && (
+                    <a href={r.draft_url} target="_blank" rel="noreferrer" className="link text-sm">View Draft ↗</a>
+                  )}
+                  {r.draft_notes && <div className="text-sm mt-4">{r.draft_notes}</div>}
+                  {r.agency_decision === 'Revisions Requested' && r.agency_feedback && (
+                    <div className="mt-8" style={{ background: 'rgba(255,156,58,0.08)', border: '1px solid rgba(255,156,58,0.2)', padding: '8px 10px', borderRadius: 4, fontSize: 12 }}>
+                      <div style={{ color: 'var(--orange)', fontWeight: 600, marginBottom: 4 }}>Feedback from agency:</div>
+                      {r.agency_feedback}
+                    </div>
+                  )}
+                  {r.agency_decision === 'Approved' && (
+                    <div className="mt-8" style={{ background: 'rgba(200,245,100,0.08)', border: '1px solid rgba(200,245,100,0.2)', padding: '8px 10px', borderRadius: 4, fontSize: 12, color: 'var(--accent)' }}>
+                      ✓ Approved{r.agency_response_date ? ` on ${fmtDate(r.agency_response_date)}` : ''}
+                      {r.agency_feedback && <div style={{ color: 'var(--text)', marginTop: 4 }}>{r.agency_feedback}</div>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
 
             {/* Action buttons */}
             <div className="flex gap-8">
               {canSubmitDraft && (
-                <button className="btn btn-primary btn-sm" onClick={() => setShowSubmitDraft(d)}>
-                  Submit Draft
-                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => setShowSubmitDraft(d)}>Submit Draft</button>
               )}
-              {d.draft_status === 'Approved' && !d.post_url && (
-                <button className="btn btn-secondary btn-sm" onClick={() => setShowMarkPosted(d)}>
-                  Add Post URL
-                </button>
-              )}
-              {d.draft_status === 'Posted' && !d.post_url && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setShowMarkPosted(d)}>
-                  Add Post URL
-                </button>
+              {(d.draft_status === 'Approved' || d.draft_status === 'Posted') && !d.post_url && (
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowMarkPosted(d)}>Add Post URL</button>
               )}
               {d.draft_status === 'Posted' && d.post_url && (
                 <span className="text-sm" style={{ color: 'var(--green)', padding: '5px 0' }}>✓ Posted</span>
