@@ -35,7 +35,12 @@ export default function AdminOverview({ setActiveView }) {
     const totalReceived   = invoices.filter(i => !isInKind(i.payment_method) && i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
     const totalPaidOut    = payouts.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
     const totalPending    = invoices.filter(i => !isInKind(i.payment_method) && ['Not Invoiced', 'Invoiced', 'Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
-    const totalInKind     = campaigns.filter(c => isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount || c.contracted_rate || 0), 0);
+    const totalInKind = campaigns
+      .filter(c => isInKind(c.invoices?.[0]?.payment_method))
+      .reduce((s, c) => {
+        const fmv = c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0;
+        return s + fmv;
+      }, 0);
 
     // Active campaigns
     const active = campaigns.filter(c => c.status === 'Active');
@@ -110,9 +115,7 @@ export default function AdminOverview({ setActiveView }) {
         <div className="stat-card"><div className="stat-value stat-green">{fmtMoney(totalReceived)}</div><div className="stat-label">Total Received</div></div>
         <div className="stat-card"><div className="stat-value stat-accent">{fmtMoney(totalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
         <div className="stat-card"><div className="stat-value stat-orange">{fmtMoney(totalPending)}</div><div className="stat-label">Pending from Agencies</div></div>
-        {totalInKind > 0 && (
-          <div className="stat-card"><div className="stat-value" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
-        )}
+        <div className="stat-card"><div className="stat-value" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
       </div>
 
       {/* Needs attention */}
