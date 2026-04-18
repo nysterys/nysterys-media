@@ -7,7 +7,14 @@ const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue
 const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold'];
 const SPLIT_STATUSES = ['Pending', 'Sent', 'Cleared', 'Failed'];
 
-const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+const fmtDate = (d) => {
+  if (!d) return '—';
+  try {
+    const parsed = parseISO(d);
+    if (isNaN(parsed.getTime())) return '—';
+    return format(parsed, 'MMM d, yyyy');
+  } catch { return '—'; }
+};
 const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
 function openPopup(url) {
