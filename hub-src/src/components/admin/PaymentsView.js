@@ -53,20 +53,57 @@ export default function PaymentsView() {
 
   const months = extractMonths(rows, 'invoice_date');
 
+  const [sortBy, setSortBy] = useState('invoice_date');
+  const [sortDir, setSortDir] = useState('desc');
+
+  function toggleSort(col) {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('asc'); }
+  }
+
   const filtered = rows.filter(r => {
     if (agencyFilter !== 'all' && r.agency_payment_status !== agencyFilter) return false;
     if (payoutFilter !== 'all' && (r.payout_status || 'Pending') !== payoutFilter) return false;
     if (creatorFilter !== 'all' && r.creator_profile_id !== creatorFilter) return false;
     if (monthFilter !== 'all' && r.invoice_date && !r.invoice_date.startsWith(monthFilter)) return false;
     return true;
+  }).sort((a, b) => {
+    let av, bv;
+    switch (sortBy) {
+      case 'campaign':   av = a.campaign_name || ''; bv = b.campaign_name || ''; break;
+      case 'creator':    av = (a.creator_name || a.creator_full_name || '').toLowerCase(); bv = (b.creator_name || b.creator_full_name || '').toLowerCase(); break;
+      case 'contracted': av = a.contracted_rate || 0; bv = b.contracted_rate || 0; break;
+      case 'agency':     av = a.agency_payment_status || ''; bv = b.agency_payment_status || ''; break;
+      case 'received':   av = a.you_received_date || ''; bv = b.you_received_date || ''; break;
+      case 'cashin':     av = a.amount_received ?? a.invoice_amount ?? 0; bv = b.amount_received ?? b.invoice_amount ?? 0; break;
+      case 'fee':        av = a.processing_fee || 0; bv = b.processing_fee || 0; break;
+      case 'payout':     av = a.payout_status || ''; bv = b.payout_status || ''; break;
+      case 'payoutamt':  av = a.payout_amount || 0; bv = b.payout_amount || 0; break;
+      case 'splits':     av = a.splits_cleared || 0; bv = b.splits_cleared || 0; break;
+      default:           av = a.invoice_date || ''; bv = b.invoice_date || '';
+    }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
   });
 
   const totalContracted = filtered.reduce((s, r) => s + (r.contracted_rate || 0), 0);
   const totalReceived = filtered.filter(r => r.you_received && !isInKind(r.payment_method)).reduce((s, r) => s + (r.amount_received || r.invoice_amount || 0), 0);
   const totalPaidOut = filtered.filter(r => r.payout_status === 'Paid' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.payout_amount || 0), 0);
   const totalPendingPayout = filtered.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && !isInKind(r.payment_method) && r.you_received).reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
+  const totalInKind = filtered.filter(r => isInKind(r.payment_method)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
+
+  function SortTh({ col, children }) {
+    const active = sortBy === col;
+    return (
+      <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => toggleSort(col)}>
+        {children}
+        <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3, fontSize: 9 }}>{active && sortDir === 'desc' ? '▼' : '▲'}</span>
+      </th>
+    );
+  }
 
   return (
     <div className="page">
@@ -77,11 +114,14 @@ export default function PaymentsView() {
         </div>
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      <div className="stats-row" style={{ gridTemplateColumns: `repeat(${totalInKind > 0 ? 5 : 4}, 1fr)` }}>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Contracted</div></div>
         <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 22 }}>{fmtMoney(totalReceived)}</div><div className="stat-label">You Received</div></div>
         <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 22 }}>{fmtMoney(totalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
         <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 22 }}>{fmtMoney(totalPendingPayout)}</div><div className="stat-label">Awaiting Payout</div></div>
+        {totalInKind > 0 && (
+          <div className="stat-card"><div className="stat-value" style={{ fontSize: 22, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
+        )}
       </div>
 
       <div className="filters-row" style={{ flexWrap: 'wrap' }}>
@@ -114,9 +154,16 @@ export default function PaymentsView() {
         <table>
           <thead>
             <tr>
-              <th>Campaign</th><th>Creator</th><th>Contracted</th>
-              <th>Agency Status</th><th>You Received</th><th>Cash In / FMV</th><th>Fee</th>
-              <th>Payout Status</th><th>Payout Out</th><th>Splits</th>
+              <SortTh col="campaign">Campaign</SortTh>
+              <SortTh col="creator">Creator</SortTh>
+              <SortTh col="contracted">Contracted</SortTh>
+              <SortTh col="agency">Agency Status</SortTh>
+              <SortTh col="received">You Received</SortTh>
+              <SortTh col="cashin">Cash In / FMV</SortTh>
+              <SortTh col="fee">Fee</SortTh>
+              <SortTh col="payout">Payout Status</SortTh>
+              <SortTh col="payoutamt">Payout Out</SortTh>
+              <SortTh col="splits">Splits</SortTh>
             </tr>
           </thead>
           <tbody>
