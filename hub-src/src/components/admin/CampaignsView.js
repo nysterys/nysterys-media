@@ -20,22 +20,40 @@ export default function CampaignsView() {
   const [showModal, setShowModal] = useState(false);
   const [detailTab, setDetailTab] = useState('deliverables');
 
+  // Sorting
+  const [sortCol, setSortCol] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
+
+  // Column filters
+  const [colFilters, setColFilters] = useState({ agency: '', platform: '', payment: '' });
+  const [openColFilter, setOpenColFilter] = useState(null);
+
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const [c, a, cr, p, dt] = await Promise.all([
+    const [c, a, cr, p, dt, inv] = await Promise.all([
       supabase.from('campaigns').select(`
         *, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
         campaign_deliverables:campaign_deliverables_with_stats(*, platform:platforms(name), deliverable_type:deliverable_types(name),
-          revision_rounds(* , submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name))),
-        invoices(*)
+          revision_rounds(* , submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name)))
       `).order('created_at', { ascending: false }),
       supabase.from('agencies').select('*').eq('is_active', true),
       supabase.from('profiles').select('*').eq('role', 'creator'),
       supabase.from('platforms').select('*').eq('is_active', true),
       supabase.from('deliverable_types').select('*').eq('is_active', true),
+      supabase.from('invoices').select('*'),
     ]);
-    setCampaigns(c.data || []);
+    // Merge invoices onto campaigns manually — avoids Supabase join issues through views
+    const invoiceMap = {};
+    for (const i of (inv.data || [])) {
+      if (!invoiceMap[i.campaign_id]) invoiceMap[i.campaign_id] = [];
+      invoiceMap[i.campaign_id].push(i);
+    }
+    const merged = (c.data || []).map(camp => ({
+      ...camp,
+      invoices: invoiceMap[camp.id] || [],
+    }));
+    setCampaigns(merged);
     setAgencies(a.data || []);
     setCreators(cr.data || []);
     setPlatforms(p.data || []);
@@ -43,21 +61,98 @@ export default function CampaignsView() {
     setLoading(false);
   }
 
-  const filtered = campaigns.filter(c => {
-    const statusOk = filter === 'all' || c.status === filter;
-    const creatorOk = creatorFilter === 'all' || c.creator_profile_id === creatorFilter;
-    return statusOk && creatorOk;
-  });
-
-  async function openDetail(c) {
-    setSelectedCampaign(c);
-    setDetailTab('deliverables');
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
   }
 
+  function SortIcon({ col }) {
+    if (sortCol !== col) return <span style={{ opacity: 0.3, marginLeft: 4 }}>⇅</span>;
+    return <span style={{ marginLeft: 4, color: 'var(--accent)' }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
+
+  // Derive unique values for column filters
+  const agencyOptions = [...new Set(campaigns.map(c => c.agency?.name).filter(Boolean))].sort();
+  const platformOptions = [...new Set(campaigns.flatMap(c => c.campaign_deliverables?.map(d => d.platform?.name) || []).filter(Boolean))].sort();
+  const paymentOptions = [...new Set(campaigns.map(c => c.invoices?.[0]?.payment_status).filter(Boolean))].sort();
+
+  // Filter + sort pipeline
+  let displayCampaigns = campaigns.filter(c => {
+    if (filter !== 'all' && c.status !== filter) return false;
+    if (creatorFilter !== 'all' && c.creator_profile_id !== creatorFilter) return false;
+    if (colFilters.agency && c.agency?.name !== colFilters.agency) return false;
+    if (colFilters.platform && !c.campaign_deliverables?.some(d => d.platform?.name === colFilters.platform)) return false;
+    if (colFilters.payment) {
+      const ps = c.invoices?.[0]?.payment_status || 'Not Invoiced';
+      if (ps !== colFilters.payment) return false;
+    }
+    return true;
+  });
+
+  displayCampaigns = [...displayCampaigns].sort((a, b) => {
+    let av, bv;
+    switch (sortCol) {
+      case 'campaign_name': av = a.campaign_name?.toLowerCase(); bv = b.campaign_name?.toLowerCase(); break;
+      case 'creator': av = (a.creator?.creator_name || a.creator?.full_name || '').toLowerCase(); bv = (b.creator?.creator_name || b.creator?.full_name || '').toLowerCase(); break;
+      case 'agency': av = (a.agency?.name || '').toLowerCase(); bv = (b.agency?.name || '').toLowerCase(); break;
+      case 'post_date': {
+        const getMin = c => c.campaign_deliverables?.reduce((min, d) => (!d.contracted_post_date ? min : (!min || d.contracted_post_date < min ? d.contracted_post_date : min)), null);
+        av = getMin(a) || ''; bv = getMin(b) || ''; break;
+      }
+      case 'rate': av = Number(a.contracted_rate) || 0; bv = Number(b.contracted_rate) || 0; break;
+      case 'status': av = a.status; bv = b.status; break;
+      case 'payment': av = a.invoices?.[0]?.payment_status || ''; bv = b.invoices?.[0]?.payment_status || ''; break;
+      default: av = a.created_at; bv = b.created_at;
+    }
+    if (av < bv) return sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  async function openDetail(c) { setSelectedCampaign(c); setDetailTab('deliverables'); }
   function closeDetail() { setSelectedCampaign(null); }
 
   const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
+
+  // Close column filter dropdowns on outside click
+  useEffect(() => {
+    if (!openColFilter) return;
+    const handler = () => setOpenColFilter(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [openColFilter]);
+
+  function ColFilterBtn({ col, options, label }) {
+    const active = !!colFilters[col];
+    return (
+      <div style={{ position: 'relative', display: 'inline-block' }}>
+        <button
+          className={`btn btn-ghost btn-sm`}
+          style={{ fontSize: 10, padding: '1px 4px', marginLeft: 4, color: active ? 'var(--accent)' : 'var(--text-muted)', border: active ? '1px solid var(--accent)' : 'none' }}
+          onClick={e => { e.stopPropagation(); setOpenColFilter(openColFilter === col ? null : col); }}
+        >▾</button>
+        {openColFilter === col && (
+          <div onClick={e => e.stopPropagation()} style={{
+            position: 'absolute', top: '100%', left: 0, zIndex: 200,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 6, minWidth: 140, padding: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+          }}>
+            <div
+              style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: active ? 'var(--text)' : 'var(--accent)' }}
+              onClick={() => { setColFilters(f => ({ ...f, [col]: '' })); setOpenColFilter(null); }}
+            >All {label}</div>
+            {options.map(o => (
+              <div key={o}
+                style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', color: colFilters[col] === o ? 'var(--accent)' : 'var(--text)', background: colFilters[col] === o ? 'rgba(255,92,0,0.08)' : 'transparent' }}
+                onClick={() => { setColFilters(f => ({ ...f, [col]: o })); setOpenColFilter(null); }}
+              >{o}</div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
@@ -66,7 +161,7 @@ export default function CampaignsView() {
       <div className="page-header">
         <div>
           <div className="page-title">CAMPAIGNS</div>
-          <div className="page-subtitle">{campaigns.length} total deals</div>
+          <div className="page-subtitle">{displayCampaigns.length} of {campaigns.length} deals</div>
         </div>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ New Campaign</button>
       </div>
@@ -86,9 +181,15 @@ export default function CampaignsView() {
             {cr.creator_name || cr.full_name}
           </button>
         ))}
+        {(colFilters.agency || colFilters.platform || colFilters.payment) && (
+          <button className="filter-chip" style={{ color: 'var(--accent)', marginLeft: 8 }}
+            onClick={() => setColFilters({ agency: '', platform: '', payment: '' })}>
+            Clear column filters ✕
+          </button>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
+      {displayCampaigns.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">◎</div>
           <div className="empty-state-title">No campaigns found</div>
@@ -99,22 +200,32 @@ export default function CampaignsView() {
           <table>
             <thead>
               <tr>
-                <th>Campaign</th>
-                <th>Creator</th>
-                <th>Agency</th>
-                <th>Platforms</th>
-                <th>Post Date</th>
-                <th>Rate</th>
-                <th>Status</th>
-                <th>Payment</th>
+                <th onClick={() => toggleSort('campaign_name')} style={{ cursor: 'pointer', userSelect: 'none' }}>Campaign<SortIcon col="campaign_name" /></th>
+                <th onClick={() => toggleSort('creator')} style={{ cursor: 'pointer', userSelect: 'none' }}>Creator<SortIcon col="creator" /></th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <span onClick={() => toggleSort('agency')}>Agency<SortIcon col="agency" /></span>
+                  <ColFilterBtn col="agency" options={agencyOptions} label="Agencies" />
+                </th>
+                <th>
+                  Platforms
+                  <ColFilterBtn col="platform" options={platformOptions} label="Platforms" />
+                </th>
+                <th onClick={() => toggleSort('post_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>Post Date<SortIcon col="post_date" /></th>
+                <th onClick={() => toggleSort('rate')} style={{ cursor: 'pointer', userSelect: 'none' }}>Rate<SortIcon col="rate" /></th>
+                <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>Status<SortIcon col="status" /></th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  <span onClick={() => toggleSort('payment')}>Payment<SortIcon col="payment" /></span>
+                  <ColFilterBtn col="payment" options={paymentOptions} label="Payment" />
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(c => {
+              {displayCampaigns.map(c => {
                 const earliestPost = c.campaign_deliverables?.reduce((min, d) => {
                   if (!d.contracted_post_date) return min;
                   return !min || d.contracted_post_date < min ? d.contracted_post_date : min;
                 }, null);
+                const paymentStatus = c.invoices?.[0]?.payment_status;
                 return (
                   <tr key={c.id} onClick={() => openDetail(c)}>
                     <td>
@@ -126,7 +237,7 @@ export default function CampaignsView() {
                     <td>
                       <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
                         {c.campaign_deliverables?.map(d => (
-                          <span key={d.id} className="badge badge-confirmed">{d.platform?.name || '?'}</span>
+                          <span key={d.id} className="badge badge-confirmed">{d.platform?.name || '?'}{d.quantity > 1 ? ` ×${d.quantity}` : ''}</span>
                         ))}
                         {(!c.campaign_deliverables || c.campaign_deliverables.length === 0) && <span className="text-muted">—</span>}
                       </div>
@@ -141,9 +252,9 @@ export default function CampaignsView() {
                     </td>
                     <td><Badge status={c.status} /></td>
                     <td>
-                      {c.invoices?.[0]
-                        ? <Badge status={c.invoices[0].payment_status} />
-                        : <span className="text-muted text-xs">—</span>
+                      {paymentStatus
+                        ? <Badge status={paymentStatus} />
+                        : <span className="text-muted text-xs">No invoice</span>
                       }
                     </td>
                   </tr>
@@ -231,16 +342,22 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
     if (campErr) { setError(campErr.message); setSaving(false); return; }
 
     if (deliverables.length > 0) {
-      await supabase.from('campaign_deliverables').insert(
-        deliverables.map(d => ({
-          campaign_id: camp.id,
-          platform_id: d.platform_id || null,
-          deliverable_type_id: d.deliverable_type_id || null,
-          deliverable_details: d.deliverable_details || null,
-          quantity: d.quantity || 1,
-          contracted_post_date: d.contracted_post_date || null,
-        }))
-      );
+      // Expand quantity > 1 into individual rows so each post is independently tracked
+      const rows = [];
+      deliverables.forEach(d => {
+        const qty = parseInt(d.quantity) || 1;
+        for (let i = 0; i < qty; i++) {
+          rows.push({
+            campaign_id: camp.id,
+            platform_id: d.platform_id || null,
+            deliverable_type_id: d.deliverable_type_id || null,
+            deliverable_details: d.deliverable_details || null,
+            quantity: 1,
+            contracted_post_date: d.contracted_post_date || null,
+          });
+        }
+      });
+      await supabase.from('campaign_deliverables').insert(rows);
     }
 
     // Auto-create invoice record
@@ -423,9 +540,11 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
   async function updateCampaignStatus(status) {
     if (status === 'Completed') {
       const deliverables = c.campaign_deliverables || [];
-      const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
-      if (!allPosted) {
-        alert(`Cannot mark as Completed — ${deliverables.filter(d => d.draft_status !== 'Posted').length} deliverable(s) are not yet Posted.`);
+      const totalSlots = deliverables.reduce((sum, d) => sum + (d.quantity || 1), 0);
+      const postedSlots = deliverables.filter(d => d.draft_status === 'Posted').reduce((sum, d) => sum + (d.quantity || 1), 0);
+      if (totalSlots === 0 || postedSlots < totalSlots) {
+        const remaining = totalSlots - postedSlots;
+        alert(`Cannot mark as Completed — ${remaining} post${remaining !== 1 ? 's' : ''} still not Posted.`);
         setEditingStatus(false);
         return;
       }
@@ -848,12 +967,14 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
   const [showMarkPosted, setShowMarkPosted] = useState(null);
   const [editingDeliverable, setEditingDeliverable] = useState(null);
   const [editingRevision, setEditingRevision] = useState(null);
+  const [expanding, setExpanding] = useState(null);
 
   const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
 
   const deliverables = campaign.campaign_deliverables || [];
-  const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
-  const postedCount = deliverables.filter(d => d.draft_status === 'Posted').length;
+  const totalSlots = deliverables.reduce((sum, d) => sum + (d.quantity || 1), 0);
+  const postedSlots = deliverables.filter(d => d.draft_status === 'Posted').reduce((sum, d) => sum + (d.quantity || 1), 0);
+  const allPosted = totalSlots > 0 && postedSlots === totalSlots;
 
   async function deleteDeliverable(d) {
     if (!window.confirm(`Delete this ${d.platform?.name || 'platform'} deliverable? This will also delete all its revision rounds. This cannot be undone.`)) return;
@@ -867,25 +988,43 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
     onUpdated();
   }
 
+  async function expandDeliverable(d) {
+    if (!window.confirm(`Expand "Bundle × ${d.quantity}" into ${d.quantity} individually tracked posts? The original row will be replaced. This cannot be undone.`)) return;
+    setExpanding(d.id);
+    const rows = Array.from({ length: d.quantity }, (_, i) => ({
+      campaign_id: d.campaign_id,
+      platform_id: d.platform_id,
+      deliverable_type_id: d.deliverable_type_id,
+      deliverable_details: d.deliverable_details ? `${d.deliverable_details} (Post ${i + 1})` : `Post ${i + 1} of ${d.quantity}`,
+      quantity: 1,
+      contracted_post_date: d.contracted_post_date,
+      draft_status: 'Not Started',
+    }));
+    await supabase.from('campaign_deliverables').insert(rows);
+    await supabase.from('campaign_deliverables').delete().eq('id', d.id);
+    setExpanding(null);
+    onUpdated();
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-12">
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>
-          {postedCount}/{deliverables.length} Posted
-          {deliverables.length > 0 && !allPosted && (
+          {postedSlots}/{totalSlots} Posted
+          {totalSlots > 0 && !allPosted && (
             <span style={{ color: 'var(--orange)', marginLeft: 8 }}>· Campaign cannot be Completed until all are posted</span>
           )}
-          {allPosted && deliverables.length > 0 && (
+          {allPosted && totalSlots > 0 && (
             <span style={{ color: 'var(--green)', marginLeft: 8 }}>· All posted ✓</span>
           )}
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeliverable(true)}>+ Add Platform</button>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeliverable(true)}>+ Add Deliverable</button>
       </div>
 
       {deliverables.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">◻</div>
-          <div className="empty-state-title">No platforms yet</div>
+          <div className="empty-state-title">No deliverables yet</div>
           <div className="empty-state-text">Add platforms covered under this deal</div>
         </div>
       )}
@@ -896,7 +1035,18 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
             <div>
               <span className="deliverable-platform">{d.platform?.name || 'Unknown Platform'}</span>
               {d.deliverable_type && <span className="text-muted text-sm" style={{ marginLeft: 8 }}>· {d.deliverable_type.name}</span>}
-              {d.quantity > 1 && <span className="text-muted text-sm"> × {d.quantity}</span>}
+              {d.quantity > 1 && (
+                <span className="text-muted text-sm" style={{ marginLeft: 6 }}>
+                  × {d.quantity}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 10, padding: '1px 6px', marginLeft: 6, color: 'var(--orange)', border: '1px solid var(--orange)' }}
+                    onClick={() => expandDeliverable(d)}
+                    disabled={expanding === d.id}
+                    title={`Split into ${d.quantity} individually tracked posts`}
+                  >{expanding === d.id ? '...' : 'Expand'}</button>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-8">
               <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEditingDeliverable(d)}>Edit</button>
@@ -904,6 +1054,12 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
               <Badge status={d.draft_status} />
             </div>
           </div>
+
+          {d.quantity > 1 && (
+            <div style={{ fontSize: 11, color: 'var(--orange)', marginBottom: 8, padding: '4px 8px', background: 'rgba(255,92,0,0.08)', borderRadius: 4 }}>
+              ⚠ Bundle of {d.quantity} posts tracked as one row — click <strong>Expand</strong> to split into {d.quantity} individually trackable posts.
+            </div>
+          )}
 
           {d.deliverable_details && (
             <div className="text-muted text-sm mb-8">{d.deliverable_details}</div>
@@ -987,6 +1143,10 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
           </div>
         </div>
       ))}
+
+      <div style={{ marginTop: 12 }}>
+        <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeliverable(true)}>+ Add Platform</button>
+      </div>
 
       {showAddDeliverable && (
         <AddDeliverableModal
@@ -1328,14 +1488,16 @@ function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose,
 
   async function save() {
     setSaving(true);
-    await supabase.from('campaign_deliverables').insert({
+    const qty = parseInt(form.quantity) || 1;
+    const rows = Array.from({ length: qty }, () => ({
       campaign_id: campaignId,
       platform_id: form.platform_id || null,
       deliverable_type_id: form.deliverable_type_id || null,
       deliverable_details: form.deliverable_details || null,
-      quantity: form.quantity || 1,
+      quantity: 1,
       contracted_post_date: form.contracted_post_date || null,
-    });
+    }));
+    await supabase.from('campaign_deliverables').insert(rows);
     setSaving(false);
     onSaved();
   }
