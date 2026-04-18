@@ -159,7 +159,7 @@ export default function PaymentsView() {
               <SortTh col="contracted">Contracted</SortTh>
               <SortTh col="agency">Agency Status</SortTh>
               <SortTh col="received">You Received</SortTh>
-              <SortTh col="cashin">Cash In / FMV</SortTh>
+              <SortTh col="cashin">Cash In</SortTh>
               <SortTh col="fee">Fee</SortTh>
               <SortTh col="payout">Payout Status</SortTh>
               <SortTh col="payoutamt">Payout Out</SortTh>
@@ -167,7 +167,7 @@ export default function PaymentsView() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => (
+            {filtered.filter(r => !isInKind(r.payment_method)).map(r => (
               <tr key={r.campaign_id} onClick={() => setSelected(r)}>
                 <td>
                   <div style={{ fontWeight: 500 }}>{r.campaign_name}</div>
@@ -177,40 +177,70 @@ export default function PaymentsView() {
                 <td style={{ fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
                 <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
                 <td>
-                  {isInKind(r.payment_method)
-                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>In Kind</span>
-                    : r.you_received
-                      ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: 12 }}>✓ {fmtDate(r.you_received_date)}</span>
-                      : <span className="text-muted text-xs">Not yet</span>}
+                  {r.you_received
+                    ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: 12 }}>✓ {fmtDate(r.you_received_date)}</span>
+                    : <span className="text-muted text-xs">Not yet</span>}
                 </td>
                 <td>
-                  {isInKind(r.payment_method)
-                    ? <span style={{ fontSize: 12 }}><span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(r.invoice_amount || r.contracted_rate)}</span><span style={{ color: 'var(--text-dim)', fontSize: 10, marginLeft: 4 }}>FMV</span></span>
-                    : r.amount_received != null
-                      ? <span style={{ color: r.amount_received < (r.invoice_amount || r.contracted_rate) ? 'var(--orange)' : 'var(--text)' }}>{fmtMoney(r.amount_received)}</span>
-                      : <span className="text-muted">—</span>}
+                  {r.amount_received != null
+                    ? <span style={{ color: r.amount_received < (r.invoice_amount || r.contracted_rate) ? 'var(--orange)' : 'var(--text)' }}>{fmtMoney(r.amount_received)}</span>
+                    : <span className="text-muted">—</span>}
                 </td>
-                <td>{!isInKind(r.payment_method) && r.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontSize: 12 }}>{fmtMoney(r.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
-                <td><PayoutBadge status={isInKind(r.payment_method) ? 'N/A' : (r.payout_status || 'Pending')} /></td>
+                <td>{r.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontSize: 12 }}>{fmtMoney(r.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
+                <td><PayoutBadge status={r.payout_status || 'Pending'} /></td>
                 <td>
-                  {isInKind(r.payment_method)
-                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>In Kind</span>
-                    : r.payout_amount != null
-                      ? <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(r.payout_amount)}</span>
-                      : <span className="text-muted">—</span>}
+                  {r.payout_amount != null
+                    ? <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(r.payout_amount)}</span>
+                    : <span className="text-muted">—</span>}
                 </td>
                 <td>
-                  {isInKind(r.payment_method)
-                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>N/A</span>
-                    : r.split_count > 0
-                      ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>{r.splits_cleared}/{r.split_count} cleared</span>
-                      : <span className="text-muted text-xs">—</span>}
+                  {r.split_count > 0
+                    ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>{r.splits_cleared}/{r.split_count} cleared</span>
+                    : <span className="text-muted text-xs">—</span>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* In-Kind table */}
+      {filtered.some(r => isInKind(r.payment_method)) && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 10 }}>
+            IN-KIND COMPENSATION
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Creator</th>
+                  <th>Agency</th>
+                  <th>Fair Value</th>
+                  <th>Agency Status</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.filter(r => isInKind(r.payment_method)).map(r => (
+                  <tr key={r.campaign_id} onClick={() => setSelected(r)} style={{ cursor: 'pointer' }}>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{r.campaign_name}</div>
+                      <div className="text-muted text-xs">{r.brand_name}</div>
+                    </td>
+                    <td>{r.creator_name || r.creator_full_name || '—'}</td>
+                    <td>{r.agency_name || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontWeight: 600 }}>{fmtMoney(r.invoice_amount ?? r.contracted_rate)}</td>
+                    <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
+                    <td><span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No cash payout</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <PaymentDetailPanel
