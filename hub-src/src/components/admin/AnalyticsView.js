@@ -3,6 +3,14 @@ import { supabase } from '../../lib/supabase';
 import { SparkLine, BarChart, HBar, DonutChart, StatTile, ChartCard, fmtNum, fmtSecs, fmtPct } from '../shared/Charts';
 import { format, parseISO, subDays } from 'date-fns';
 
+function openPopup(url) {
+  if (!url) return;
+  const w = 480, h = 720;
+  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
+}
+
 export default function AnalyticsView() {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -300,54 +308,122 @@ export default function AnalyticsView() {
 function CampaignPerformanceTable({ campaignStats }) {
   if (!campaignStats || campaignStats.length === 0) return null;
 
+  // Group deliverables by campaign_id
+  const grouped = {};
+  for (const d of campaignStats) {
+    const key = d.campaign_id;
+    if (!grouped[key]) {
+      grouped[key] = { meta: d.campaign, rows: [] };
+    }
+    grouped[key].rows.push(d);
+  }
+
+  // Compute campaign-level totals
+  function totals(rows) {
+    const n = rows.length;
+    const sum = (key) => rows.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+    const avg = (key) => n ? sum(key) / n : null;
+    const totalViews = sum('views');
+    const totalLikes = sum('likes');
+    const totalComments = sum('comments');
+    const totalShares = sum('shares');
+    const engRate = totalViews > 0
+      ? ((totalLikes + totalComments + totalShares) / totalViews * 100).toFixed(2)
+      : null;
+    return {
+      views: totalViews,
+      likes: totalLikes,
+      comments: totalComments,
+      shares: totalShares,
+      engagement_rate: engRate,
+      average_time_watched: avg('average_time_watched'),
+      full_video_watched_rate: avg('full_video_watched_rate'),
+      reach: sum('reach'),
+      count: n,
+    };
+  }
+
+  const cellSm = { fontSize: 11, padding: '4px 8px' };
+  const cellTot = { fontSize: 12, padding: '8px 8px', background: 'rgba(255,92,0,0.06)', borderTop: '1px solid var(--border)', borderBottom: '2px solid var(--border)' };
+
   return (
     <ChartCard title="SPONSORED CAMPAIGN PERFORMANCE">
       <div className="table-wrap" style={{ border: 'none' }}>
         <table>
           <thead>
             <tr>
-              <th>Campaign</th>
-              <th>Platform</th>
-              <th>Views</th>
-              <th>Likes</th>
-              <th>Comments</th>
-              <th>Shares</th>
-              <th>Engagement Rate</th>
-              <th>Avg Watch Time</th>
-              <th>Completion</th>
-              <th>Reach</th>
+              <th style={{ fontSize: 11 }}>Campaign / Post</th>
+              <th style={{ fontSize: 11 }}>Link</th>
+              <th style={{ fontSize: 11 }}>Views</th>
+              <th style={{ fontSize: 11 }}>Likes</th>
+              <th style={{ fontSize: 11 }}>Comments</th>
+              <th style={{ fontSize: 11 }}>Shares</th>
+              <th style={{ fontSize: 11 }}>ER</th>
+              <th style={{ fontSize: 11 }}>Avg Watch</th>
+              <th style={{ fontSize: 11 }}>Completion</th>
+              <th style={{ fontSize: 11 }}>Reach</th>
             </tr>
           </thead>
           <tbody>
-            {campaignStats.map(d => (
-              <tr key={d.id} onClick={() => {}}>
-                <td>
-                  <div style={{ fontWeight: 500 }}>{d.campaign?.campaign_name || '—'}</div>
-                  <div className="text-muted text-xs">{d.campaign?.brand_name}</div>
-                </td>
-                <td>
-                  {d.post_url ? (
-                    <a href={d.post_url} target="_blank" rel="noreferrer" className="link text-sm" onClick={e => e.stopPropagation()}>
-                      View ↗
-                    </a>
-                  ) : '—'}
-                </td>
-                <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
-                <td>{fmtNum(d.likes)}</td>
-                <td>{fmtNum(d.comments)}</td>
-                <td>{fmtNum(d.shares)}</td>
-                <td>
-                  {d.engagement_rate != null ? (
-                    <span style={{ color: d.engagement_rate > 5 ? 'var(--green)' : d.engagement_rate > 2 ? 'var(--orange)' : 'var(--text-muted)' }}>
-                      {d.engagement_rate}%
-                    </span>
-                  ) : '—'}
-                </td>
-                <td>{fmtSecs(d.average_time_watched)}</td>
-                <td>{fmtPct(d.full_video_watched_rate)}</td>
-                <td>{fmtNum(d.reach)}</td>
-              </tr>
-            ))}
+            {Object.values(grouped).map(({ meta, rows }) => {
+              const t = totals(rows);
+              const erColor = t.engagement_rate > 5 ? 'var(--green)' : t.engagement_rate > 2 ? 'var(--orange)' : 'var(--text-muted)';
+              return (
+                <React.Fragment key={rows[0]?.campaign_id}>
+                  {/* Individual post rows — dense */}
+                  {rows.map((d, i) => (
+                    <tr key={d.id} style={{ opacity: 0.75 }}>
+                      <td style={cellSm}>
+                        {i === 0 && (
+                          <div style={{ fontWeight: 500, fontSize: 11, marginBottom: 1 }}>{meta?.campaign_name || '—'}</div>
+                        )}
+                        <div className="text-muted" style={{ fontSize: 10 }}>
+                          {d.video_title ? (d.video_title.length > 45 ? d.video_title.slice(0, 45) + '…' : d.video_title) : `Post ${i + 1}`}
+                        </div>
+                      </td>
+                      <td style={cellSm}>
+                        {d.post_url
+                          ? <span className="link" style={{ fontSize: 11, cursor: 'pointer' }} onClick={() => openPopup(d.post_url)}>View ↗</span>
+                          : '—'}
+                      </td>
+                      <td style={{ ...cellSm, color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(d.views)}</td>
+                      <td style={cellSm}>{fmtNum(d.likes)}</td>
+                      <td style={cellSm}>{fmtNum(d.comments)}</td>
+                      <td style={cellSm}>{fmtNum(d.shares)}</td>
+                      <td style={cellSm}>
+                        {d.engagement_rate != null
+                          ? <span style={{ color: d.engagement_rate > 5 ? 'var(--green)' : d.engagement_rate > 2 ? 'var(--orange)' : 'var(--text-muted)' }}>{d.engagement_rate}%</span>
+                          : '—'}
+                      </td>
+                      <td style={cellSm}>{fmtSecs(d.average_time_watched)}</td>
+                      <td style={cellSm}>{fmtPct(d.full_video_watched_rate)}</td>
+                      <td style={cellSm}>{fmtNum(d.reach)}</td>
+                    </tr>
+                  ))}
+
+                  {/* Campaign totals row */}
+                  <tr>
+                    <td style={{ ...cellTot, fontWeight: 700, fontSize: 12 }}>
+                      <span style={{ color: 'var(--accent)' }}>∑</span> {meta?.campaign_name || '—'}
+                      <span className="text-muted" style={{ fontWeight: 400, marginLeft: 6, fontSize: 11 }}>{t.count} post{t.count !== 1 ? 's' : ''}</span>
+                    </td>
+                    <td style={cellTot}></td>
+                    <td style={{ ...cellTot, color: 'var(--orange)', fontWeight: 700 }}>{fmtNum(t.views)}</td>
+                    <td style={{ ...cellTot, fontWeight: 600 }}>{fmtNum(t.likes)}</td>
+                    <td style={{ ...cellTot, fontWeight: 600 }}>{fmtNum(t.comments)}</td>
+                    <td style={{ ...cellTot, fontWeight: 600 }}>{fmtNum(t.shares)}</td>
+                    <td style={cellTot}>
+                      {t.engagement_rate != null
+                        ? <span style={{ color: erColor, fontWeight: 700 }}>{t.engagement_rate}%</span>
+                        : '—'}
+                    </td>
+                    <td style={{ ...cellTot, color: 'var(--text-muted)' }}>{fmtSecs(t.average_time_watched)} avg</td>
+                    <td style={{ ...cellTot, color: 'var(--text-muted)' }}>{t.full_video_watched_rate != null ? fmtPct(t.full_video_watched_rate) : '—'} avg</td>
+                    <td style={{ ...cellTot, fontWeight: 600 }}>{fmtNum(t.reach)}</td>
+                  </tr>
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
