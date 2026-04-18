@@ -5,13 +5,31 @@ import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
 import { fmtDate } from '../../utils/format';
 
-export default function CreatorCampaigns() {
+function isInKind(paymentMethod) {
+  return (paymentMethod || '').toLowerCase() === 'in kind';
+}
+
+export default function CreatorCampaigns({ initialCampaignId, onCampaignOpened }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState('deliverables');
   const [filter, setFilter] = useState('all');
+
+  useEffect(() => { fetch(); }, []);
+
+  // Auto-open campaign when navigated from overview
+  useEffect(() => {
+    if (initialCampaignId && campaigns.length > 0) {
+      const target = campaigns.find(c => c.id === initialCampaignId);
+      if (target) {
+        setSelected(target);
+        setTab('deliverables');
+        if (onCampaignOpened) onCampaignOpened();
+      }
+    }
+  }, [initialCampaignId, campaigns]);
 
   useEffect(() => { fetch(); }, []);
 
@@ -24,7 +42,8 @@ export default function CreatorCampaigns() {
           *, platform:platforms(name), deliverable_type:deliverable_types(name),
           revision_rounds(*, submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name))
         ),
-        invoices(payment_status, invoice_amount, invoice_date, payment_received_date)
+        invoices(payment_status, invoice_amount, invoice_date, payment_received_date, payment_method, amount_received, processing_fee, you_received, you_received_date),
+        creator_payouts(payout_status, payout_amount, payout_date, payout_notes, payout_splits(split_status, amount, destination:payment_destinations(name, account_type, account_last4, institution), sent_date, cleared_date, reference))
       `)
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false });
@@ -108,10 +127,20 @@ export default function CreatorCampaigns() {
                     </td>
                     <td><Badge status={c.status} /></td>
                     <td>
-                      {c.invoices?.[0]
-                        ? <Badge status={c.invoices[0].payment_status} />
-                        : <span className="text-muted text-xs">—</span>
-                      }
+                      {(() => {
+                        const inv = c.invoices?.[0];
+                        const payout = c.creator_payouts?.[0];
+                        if (isInKind(inv?.payment_method)) {
+                          return <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>In Kind</span>;
+                        }
+                        if (payout?.payout_status) {
+                          return <Badge status={payout.payout_status} />;
+                        }
+                        if (inv?.payment_status) {
+                          return <Badge status={inv.payment_status} />;
+                        }
+                        return <span className="text-muted text-xs">—</span>;
+                      })()}
                     </td>
                   </tr>
                 );
@@ -142,6 +171,8 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
   
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
   const inv = c.invoices?.[0];
+  const payout = c.creator_payouts?.[0];
+  const inKind = isInKind(inv?.payment_method);
 
   return (
     <div className="detail-panel">
@@ -210,37 +241,124 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
 
         {tab === 'payment' && (
           <div>
-            <div className="detail-section">
-              <div className="detail-section-title">Payment Info</div>
-              <div className="detail-grid">
-                <div>
-                  <div className="detail-item-label">Contracted Rate</div>
-                  <div className="detail-item-value" style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(c.contracted_rate)}</div>
+            {inKind ? (
+              <div>
+                <div className="detail-section-title">COMPENSATION</div>
+                <div style={{ padding: '12px 14px', borderRadius: 6, fontSize: 13, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>In-Kind Compensation</div>
+                  This campaign was compensated in kind (fair value: {fmtMoney(inv?.invoice_amount || c.contracted_rate)}). No cash payout applies.
                 </div>
-                <div>
-                  <div className="detail-item-label">Payment Status</div>
-                  <div className="detail-item-value">{inv ? <Badge status={inv.payment_status} /> : '—'}</div>
-                </div>
-                {inv?.invoice_number && (
-                  <div>
-                    <div className="detail-item-label">Invoice #</div>
-                    <div className="detail-item-value font-mono">{inv.invoice_number}</div>
-                  </div>
-                )}
-                {inv?.invoice_date && (
-                  <div>
-                    <div className="detail-item-label">Invoice Date</div>
-                    <div className="detail-item-value">{fmtDate(inv.invoice_date)}</div>
-                  </div>
-                )}
-                {inv?.payment_received_date && (
-                  <div>
-                    <div className="detail-item-label">Payment Received</div>
-                    <div className="detail-item-value" style={{ color: 'var(--green)' }}>{fmtDate(inv.payment_received_date)}</div>
-                  </div>
-                )}
               </div>
-            </div>
+            ) : (
+              <>
+                <div className="detail-section">
+                  <div className="detail-section-title">Agency Payment</div>
+                  <div className="detail-grid">
+                    <div>
+                      <div className="detail-item-label">Contracted Rate</div>
+                      <div className="detail-item-value" style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(c.contracted_rate)}</div>
+                    </div>
+                    <div>
+                      <div className="detail-item-label">Agency Status</div>
+                      <div className="detail-item-value">{inv ? <Badge status={inv.payment_status} /> : '—'}</div>
+                    </div>
+                    {inv?.invoice_date && (
+                      <div>
+                        <div className="detail-item-label">Invoice Date</div>
+                        <div className="detail-item-value">{fmtDate(inv.invoice_date)}</div>
+                      </div>
+                    )}
+                    {inv?.payment_received_date && (
+                      <div>
+                        <div className="detail-item-label">Agency Paid Date</div>
+                        <div className="detail-item-value" style={{ color: 'var(--green)' }}>{fmtDate(inv.payment_received_date)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="detail-section">
+                  <div className="detail-section-title">Your Payout</div>
+                  {!payout ? (
+                    <div className="text-muted text-sm">Payout not yet created by your manager.</div>
+                  ) : (
+                    <>
+                      <div className="detail-grid" style={{ marginBottom: 16 }}>
+                        <div>
+                          <div className="detail-item-label">Payout Amount</div>
+                          <div className="detail-item-value" style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 18 }}>{fmtMoney(payout.payout_amount)}</div>
+                        </div>
+                        <div>
+                          <div className="detail-item-label">Payout Status</div>
+                          <div className="detail-item-value"><Badge status={payout.payout_status || 'Pending'} /></div>
+                        </div>
+                        {payout.payout_date && (
+                          <div>
+                            <div className="detail-item-label">Payout Date</div>
+                            <div className="detail-item-value">{fmtDate(payout.payout_date)}</div>
+                          </div>
+                        )}
+                        {payout.payout_notes && (
+                          <div style={{ gridColumn: 'span 2' }}>
+                            <div className="detail-item-label">Notes</div>
+                            <div className="detail-item-value text-muted">{payout.payout_notes}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {payout.payout_splits?.length > 0 && (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-dim)', marginBottom: 10 }}>
+                            Destination Breakdown
+                          </div>
+                          {payout.payout_splits.map((s, i) => {
+                            const dest = s.destination;
+                            const statusColor = s.split_status === 'Cleared' ? 'var(--green)' : s.split_status === 'Sent' ? 'var(--accent)' : s.split_status === 'Failed' ? 'var(--red)' : 'var(--text-muted)';
+                            return (
+                              <div key={i} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px', marginBottom: 8 }}>
+                                <div className="flex items-center justify-between mb-8">
+                                  <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13 }}>{dest?.name || 'Unknown destination'}</div>
+                                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                      {dest?.account_type}{dest?.account_last4 ? ` ···${dest.account_last4}` : ''}{dest?.institution ? ` · ${dest.institution}` : ''}
+                                    </div>
+                                  </div>
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: statusColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.split_status}</span>
+                                </div>
+                                <div className="detail-grid">
+                                  <div>
+                                    <div className="detail-item-label">Amount</div>
+                                    <div className="detail-item-value" style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 15 }}>{fmtMoney(s.amount)}</div>
+                                  </div>
+                                  {s.sent_date && (
+                                    <div>
+                                      <div className="detail-item-label">Sent</div>
+                                      <div className="detail-item-value">{fmtDate(s.sent_date)}</div>
+                                    </div>
+                                  )}
+                                  {s.cleared_date && (
+                                    <div>
+                                      <div className="detail-item-label">Cleared</div>
+                                      <div className="detail-item-value" style={{ color: 'var(--green)' }}>✓ {fmtDate(s.cleared_date)}</div>
+                                    </div>
+                                  )}
+                                  {s.reference && (
+                                    <div style={{ gridColumn: 'span 2' }}>
+                                      <div className="detail-item-label">Reference</div>
+                                      <div className="detail-item-value" style={{ fontFamily: 'monospace', fontSize: 11 }}>{s.reference}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 

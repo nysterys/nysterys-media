@@ -9,7 +9,7 @@ function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
-export default function CreatorOverview({ setActiveView }) {
+export default function CreatorOverview({ setActiveView, navigateToCampaign }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -97,25 +97,41 @@ export default function CreatorOverview({ setActiveView }) {
         </div>
       </div>
 
-      {/* Needs action */}
+      {/* Needs action — grouped by campaign */}
       {needsAction.length > 0 && (
         <div className="card mb-16" style={{ borderColor: 'rgba(255,156,58,0.3)' }}>
           <div className="card-title" style={{ color: 'var(--orange)', marginBottom: 12 }}>⚠ NEEDS YOUR ATTENTION</div>
-          {needsAction.map(d => (
-            <div key={d.id} className="flex items-center justify-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-              <div>
-                <div style={{ fontWeight: 500 }}>{d.campaign.campaign_name}</div>
-                <div className="text-muted text-sm">{d.platform?.name} · {d.campaign.brand_name}</div>
+          {Object.values(
+            needsAction.reduce((groups, d) => {
+              const key = d.campaign.id;
+              if (!groups[key]) groups[key] = { campaign: d.campaign, items: [] };
+              groups[key].items.push(d);
+              return groups;
+            }, {})
+          ).map(({ campaign, items }) => (
+            <div key={campaign.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
+              <div
+                style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, cursor: 'pointer' }}
+                onClick={() => navigateToCampaign(campaign.id)}
+              >
+                {campaign.campaign_name}
+                <span className="text-muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{campaign.brand_name}</span>
+                <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--orange)' }}>→</span>
               </div>
-              <div className="flex items-center gap-12">
-                <Badge status={d.draft_status} />
-                {d.contracted_post_date && (
-                  <span className="text-sm text-muted">Due {fmtDate(d.contracted_post_date)}</span>
-                )}
-              </div>
+              {items.map(d => (
+                <div key={d.id} className="flex items-center justify-between" style={{ padding: '6px 0 6px 12px', borderLeft: '2px solid rgba(255,156,58,0.3)' }}>
+                  <div className="text-muted text-sm">{d.platform?.name}{d.deliverable_type?.name ? ` · ${d.deliverable_type.name}` : ''}</div>
+                  <div className="flex items-center gap-12">
+                    <Badge status={d.draft_status} />
+                    {d.contracted_post_date && (
+                      <span className="text-sm text-muted">Due {fmtDate(d.contracted_post_date)}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
-          <button className="btn btn-secondary btn-sm mt-12" onClick={() => setActiveView('campaigns')}>Go to Campaigns →</button>
+          <button className="btn btn-secondary btn-sm mt-4" onClick={() => setActiveView('campaigns')}>Go to Campaigns →</button>
         </div>
       )}
 
@@ -169,7 +185,7 @@ export default function CreatorOverview({ setActiveView }) {
                   const payout = c.creator_payouts?.[0];
                   const inKind = isInKind(inv?.payment_method);
                   return (
-                    <tr key={c.id} onClick={() => setActiveView('campaigns')} style={{ cursor: 'pointer' }}>
+                    <tr key={c.id} onClick={() => navigateToCampaign(c.id)} style={{ cursor: 'pointer' }}>
                       <td style={{ fontWeight: 500 }}>{c.campaign_name}</td>
                       <td>{c.brand_name}</td>
                       <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
@@ -227,7 +243,7 @@ export default function CreatorOverview({ setActiveView }) {
               </thead>
               <tbody>
                 {upcoming.map(c => (
-                  <tr key={c.id} onClick={() => setActiveView('campaigns')} style={{ cursor: 'pointer' }}>
+                  <tr key={c.id} onClick={() => navigateToCampaign(c.id)} style={{ cursor: 'pointer' }}>
                     <td style={{ fontWeight: 500 }}>{c.campaign_name}</td>
                     <td>{c.brand_name}</td>
                     <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
