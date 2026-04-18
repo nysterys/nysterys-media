@@ -2,23 +2,28 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
-import { fmtDate } from '../../utils/format';
-import { format, parseISO, isPast, isWithinInterval, addDays } from 'date-fns';
+import { fmtDate, fmtMoney } from '../../utils/format';
+import { parseISO, isWithinInterval, addDays } from 'date-fns';
+
+function isInKind(paymentMethod) {
+  return (paymentMethod || '').toLowerCase() === 'in kind';
+}
 
 export default function CreatorOverview({ setActiveView }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  async function fetch() {
+  async function fetchData() {
     const { data } = await supabase
       .from('campaigns')
       .select(`
         *, agency:agencies(name),
         campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name), revision_rounds(*)),
-        invoices(payment_status, invoice_amount)
+        invoices(payment_status, invoice_amount, payment_method),
+        creator_payouts(payout_status, payout_amount)
       `)
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false });
@@ -26,22 +31,29 @@ export default function CreatorOverview({ setActiveView }) {
     setLoading(false);
   }
 
-  
+  const active    = campaigns.filter(c => c.status === 'Active');
+  const upcoming  = campaigns.filter(c => c.status === 'Confirmed');
 
-  const active = campaigns.filter(c => c.status === 'Active');
-  const upcoming = campaigns.filter(c => c.status === 'Confirmed');
-  const totalEarned = campaigns
-    .filter(c => c.invoices?.[0]?.payment_status === 'Paid')
-    .reduce((s, c) => s + (c.invoices[0].invoice_amount || 0), 0);
+  // Total paid = sum of cleared cash payouts (exclude in-kind)
+  const totalEarned = campaigns.reduce((sum, c) => {
+    const inv = c.invoices?.[0];
+    if (isInKind(inv?.payment_method)) return sum;
+    const payout = c.creator_payouts?.[0];
+    if (payout?.payout_status === 'Paid') return sum + (payout.payout_amount || 0);
+    return sum;
+  }, 0);
 
-  // Deliverables needing action: draft not submitted or revisions requested
+  // Deliverables needing action
   const needsAction = campaigns.flatMap(c =>
     (c.campaign_deliverables || [])
-      .filter(d => ['Not Started', 'Revisions Requested'].includes(d.draft_status) && c.status !== 'Cancelled' && c.status !== 'Completed')
+      .filter(d =>
+        ['Not Started', 'Revisions Requested'].includes(d.draft_status) &&
+        c.status !== 'Cancelled' && c.status !== 'Completed'
+      )
       .map(d => ({ ...d, campaign: c }))
   );
 
-  // Upcoming post deadlines in next 14 days
+  // Upcoming deadlines in next 14 days
   const soon = campaigns.flatMap(c =>
     (c.campaign_deliverables || [])
       .filter(d => {
@@ -65,6 +77,7 @@ export default function CreatorOverview({ setActiveView }) {
         </div>
       </div>
 
+      {/* KPI tiles */}
       <div className="stats-row">
         <div className="stat-card">
           <div className="stat-value stat-accent">{active.length}</div>
@@ -79,14 +92,15 @@ export default function CreatorOverview({ setActiveView }) {
           <div className="stat-label">Need Action</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value stat-green">${totalEarned.toLocaleString()}</div>
+          <div className="stat-value stat-green">{fmtMoney(totalEarned)}</div>
           <div className="stat-label">Total Paid to You</div>
         </div>
       </div>
 
+      {/* Needs action */}
       {needsAction.length > 0 && (
         <div className="card mb-16" style={{ borderColor: 'rgba(255,156,58,0.3)' }}>
-          <div className="card-title" style={{ color: 'var(--orange)' }}>⚠ NEEDS YOUR ATTENTION</div>
+          <div className="card-title" style={{ color: 'var(--orange)', marginBottom: 12 }}>⚠ NEEDS YOUR ATTENTION</div>
           {needsAction.map(d => (
             <div key={d.id} className="flex items-center justify-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
               <div>
@@ -105,9 +119,10 @@ export default function CreatorOverview({ setActiveView }) {
         </div>
       )}
 
+      {/* Upcoming deadlines */}
       {soon.length > 0 && (
         <div className="card mb-16">
-          <div className="card-title">POSTING IN THE NEXT 14 DAYS</div>
+          <div className="card-title" style={{ marginBottom: 12 }}>POSTING IN THE NEXT 14 DAYS</div>
           {soon.map(d => (
             <div key={d.id} className="flex items-center justify-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
               <div>
@@ -123,7 +138,116 @@ export default function CreatorOverview({ setActiveView }) {
         </div>
       )}
 
-      {needsAction.length === 0 && soon.length === 0 && (
+      {/* Active campaigns table */}
+      {active.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 10 }}>
+            ACTIVE CAMPAIGNS
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Brand</th>
+                  <th>Agency</th>
+                  <th>Posts</th>
+                  <th>Next Deadline</th>
+                  <th>Progress</th>
+                  <th>Payment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {active.map(c => {
+                  const deliverables = c.campaign_deliverables || [];
+                  const posted = deliverables.filter(d => d.draft_status === 'Posted').length;
+                  const total = deliverables.length;
+                  const nextDeadline = deliverables
+                    .filter(d => d.contracted_post_date && d.draft_status !== 'Posted')
+                    .sort((a, b) => a.contracted_post_date > b.contracted_post_date ? 1 : -1)[0];
+                  const inv = c.invoices?.[0];
+                  const payout = c.creator_payouts?.[0];
+                  const inKind = isInKind(inv?.payment_method);
+                  return (
+                    <tr key={c.id} onClick={() => setActiveView('campaigns')} style={{ cursor: 'pointer' }}>
+                      <td style={{ fontWeight: 500 }}>{c.campaign_name}</td>
+                      <td>{c.brand_name}</td>
+                      <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
+                      <td>{total > 0 ? `${posted}/${total}` : <span className="text-muted">—</span>}</td>
+                      <td>
+                        {nextDeadline
+                          ? <span style={{ fontWeight: 500 }}>{fmtDate(nextDeadline.contracted_post_date)}</span>
+                          : <span className="text-muted">—</span>}
+                      </td>
+                      <td>
+                        {total > 0 ? (
+                          <div className="flex items-center gap-8">
+                            <div style={{ width: 60, height: 4, background: 'var(--surface3)', borderRadius: 2 }}>
+                              <div style={{ width: `${(posted / total) * 100}%`, height: '100%', background: posted === total ? 'var(--green)' : 'var(--orange)', borderRadius: 2 }} />
+                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{Math.round((posted / total) * 100)}%</span>
+                          </div>
+                        ) : <span className="text-muted">—</span>}
+                      </td>
+                      <td>
+                        {inKind
+                          ? <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>In Kind</span>
+                          : payout?.payout_status
+                            ? <Badge status={payout.payout_status} />
+                            : inv?.payment_status
+                              ? <Badge status={inv.payment_status} />
+                              : <span className="text-muted">—</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming confirmed campaigns */}
+      {upcoming.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 10 }}>
+            CONFIRMED UPCOMING
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Campaign</th>
+                  <th>Brand</th>
+                  <th>Agency</th>
+                  <th>Posts</th>
+                  <th>Starts</th>
+                  <th>Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcoming.map(c => (
+                  <tr key={c.id} onClick={() => setActiveView('campaigns')} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 500 }}>{c.campaign_name}</td>
+                    <td>{c.brand_name}</td>
+                    <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
+                    <td>{c.campaign_deliverables?.length || <span className="text-muted">—</span>}</td>
+                    <td>{fmtDate(c.campaign_start_date) || <span className="text-muted">—</span>}</td>
+                    <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                      {isInKind(c.invoices?.[0]?.payment_method)
+                        ? <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>In Kind</span>
+                        : fmtMoney(c.contracted_rate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* All clear */}
+      {needsAction.length === 0 && soon.length === 0 && active.length === 0 && upcoming.length === 0 && (
         <div className="card">
           <div className="empty-state" style={{ padding: '30px 20px' }}>
             <div className="empty-state-icon">✓</div>
