@@ -99,9 +99,11 @@ export default function AnalyticsView() {
   }
 
   const profile = data?.profile || [];
-  // Filter out days where followers_count is zero or null — TikTok API occasionally
+  // Filter out days where follower data is zero or null — TikTok API occasionally
   // returns 0 for the most recent day before the data is finalized
-  const profileClean = profile.filter(d => Number(d.followers_count) > 0);
+  const profileClean = profile.filter(d =>
+    Number(d.followers_count) > 0 && Number(d.net_followers) > 0
+  );
   const latestProfile = profileClean[profileClean.length - 1];
   const earliestProfile = profileClean[0];
 
