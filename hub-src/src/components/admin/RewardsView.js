@@ -115,7 +115,7 @@ export default function RewardsView() {
           <thead>
             <tr>
               <th>Creator</th><th>Platform</th><th>Program</th><th>Period</th>
-              <th>Gross</th><th>Platform Status</th><th>You Received</th><th>Fees Paid</th><th>Payout Status</th><th>Paid Out</th>
+              <th>Gross</th><th>Platform Status</th><th>Fees Paid</th><th>You Received</th><th>Payout Status</th><th>Paid Out</th>
             </tr>
           </thead>
           <tbody>

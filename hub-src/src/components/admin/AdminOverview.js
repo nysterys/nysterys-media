@@ -32,6 +32,7 @@ function inPeriod(dateStr, period) {
   if (!dateStr) return period === 'all';
   if (period === 'all') return true;
   if (period === 'ytd') return dateStr.startsWith(String(new Date().getFullYear()));
+  if (period === 'lastyear') return dateStr.startsWith(String(new Date().getFullYear() - 1));
   return dateStr.startsWith(period);
 }
 
@@ -39,8 +40,7 @@ export default function AdminOverview({ setActiveView }) {
   const [data, setData] = useState(null);
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [campaignPeriod, setCampaignPeriod] = useState(lastMonth());
-  const [rewardPeriod, setRewardPeriod] = useState(lastMonth());
+  const [period, setPeriod] = useState(lastMonth());
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -107,18 +107,18 @@ export default function AdminOverview({ setActiveView }) {
 
   const { campaigns, invoices, payouts, active, needsAttentionGrouped, agencyPending, payoutsPending } = data;
 
-  // Campaign KPIs filtered by campaignPeriod
-  const filtInvoices = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, campaignPeriod));
+  // Campaign KPIs filtered by period
+  const filtInvoices = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, period));
   const filtPayouts  = payouts.filter(p => {
     const inv = invoices.find(i => i.campaign_id === p.campaign_id);
-    return inPeriod(inv?.invoice_date || inv?.you_received_date, campaignPeriod);
+    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
   });
   const filtCampaigns = campaigns.filter(c => {
     const inv = c.invoices?.[0];
-    return inPeriod(inv?.invoice_date || inv?.you_received_date, campaignPeriod);
+    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
   });
 
-  const totalContracted = campaignPeriod === 'all'
+  const totalContracted = period === 'all'
     ? campaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.contracted_rate || 0), 0)
     : filtCampaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.contracted_rate || 0), 0);
   const totalReceived   = filtInvoices.filter(i => !isInKind(i.payment_method) && i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
@@ -127,8 +127,8 @@ export default function AdminOverview({ setActiveView }) {
   const totalFeesCampaign = filtInvoices.filter(i => !isInKind(i.payment_method)).reduce((s, i) => s + (i.processing_fee || 0), 0);
   const totalInKind     = campaigns.filter(c => isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0), 0);
 
-  // Reward KPIs filtered by rewardPeriod
-  const filtRewards = rewards.filter(e => inPeriod(e.period_month, rewardPeriod));
+  // Reward KPIs filtered by period
+  const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
   const rTotalGross    = filtRewards.reduce((s, e) => s + (e.gross_amount || 0), 0);
   const rTotalReceived = filtRewards.filter(e => e.you_received).reduce((s, e) => s + (e.amount_received || e.invoice_amount || 0), 0);
   const rTotalPaidOut  = filtRewards.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
@@ -168,15 +168,15 @@ export default function AdminOverview({ setActiveView }) {
           <div className="page-title">OVERVIEW</div>
           <div className="page-subtitle">All campaigns across Kym and Mys</div>
         </div>
+        <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={period} onChange={e => setPeriod(e.target.value)}>
+          {buildPeriodOptions([...new Set([...campaignMonths, ...rewardMonths])].sort().reverse()).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
 
       {/* Campaign payment tiles */}
       <div style={tileGroupStyle}>
         <div style={groupHeaderStyle}>
           <div style={groupLabelStyle}>CAMPAIGN PAYMENTS</div>
-          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12 }} value={campaignPeriod} onChange={e => setCampaignPeriod(e.target.value)}>
-            {buildPeriodOptions(campaignMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
         </div>
         <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
           <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Total Contracted</div></div>
@@ -192,9 +192,6 @@ export default function AdminOverview({ setActiveView }) {
       <div style={tileGroupStyle}>
         <div style={groupHeaderStyle}>
           <div style={groupLabelStyle}>PLATFORM REWARDS</div>
-          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12 }} value={rewardPeriod} onChange={e => setRewardPeriod(e.target.value)}>
-            {buildPeriodOptions(rewardMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
         </div>
         <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
           <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(rTotalGross)}</div><div className="stat-label">Gross Earned</div></div>

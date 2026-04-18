@@ -19,6 +19,7 @@ function buildPeriodOptions(months) {
   return [
     { value: 'all', label: 'All time' },
     { value: 'ytd', label: 'Year to date' },
+    { value: 'lastyear', label: 'Last year' },
     ...months.map(m => ({ value: m, label: new Date(parseInt(m.split('-')[0]), parseInt(m.split('-')[1]) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) })),
   ];
 }
@@ -27,6 +28,7 @@ function inPeriod(dateStr, period) {
   if (!dateStr) return period === 'all';
   if (period === 'all') return true;
   if (period === 'ytd') return dateStr.startsWith(String(new Date().getFullYear()));
+  if (period === 'lastyear') return dateStr.startsWith(String(new Date().getFullYear() - 1));
   return dateStr.startsWith(period);
 }
 
@@ -35,8 +37,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
   const [campaigns, setCampaigns] = useState([]);
   const [allRewards, setAllRewards] = useState([]);
   const [rewardsPaid, setRewardsPaid] = useState(0);
-  const [campaignPeriod, setCampaignPeriod] = useState(lastMonth());
-  const [rewardPeriod, setRewardPeriod] = useState(lastMonth());
+  const [period, setPeriod] = useState(lastMonth());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
@@ -50,7 +51,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
         *, agency:agencies(name),
         campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name), revision_rounds(*)),
         invoices(payment_status, invoice_amount, payment_method),
-        creator_payouts(payout_status, payout_amount)
+        creator_payouts(payout_status, payout_amount, payout_date)
       `)
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false }),
@@ -105,7 +106,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
   // Period-filtered totals
   const filteredEarned = campaigns.filter(c => {
     const p = c.creator_payouts?.[0];
-    return p?.payout_status === 'Paid' && inPeriod(p?.payout_date, campaignPeriod);
+    return p?.payout_status === 'Paid' && inPeriod(p?.payout_date, period);
   }).reduce((s, c) => {
     const inv = c.invoices?.[0];
     if (isInKind(inv?.payment_method)) return s;
@@ -113,7 +114,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
   }, 0);
 
   const filteredRewardsPaid = allRewards.filter(e =>
-    e.payout_status === 'Paid' && inPeriod(e.period_month, rewardPeriod)
+    e.payout_status === 'Paid' && inPeriod(e.period_month, period)
   ).reduce((s, e) => s + (e.payout_amount || 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -125,6 +126,9 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
           <div className="page-title">HEY, {(profile?.creator_name || profile?.full_name || '').toUpperCase()}</div>
           <div className="page-subtitle">Here's what needs your attention</div>
         </div>
+        <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={period} onChange={e => setPeriod(e.target.value)}>
+          {buildPeriodOptions([...new Set([...campaignMonths, ...rewardMonths])].sort().reverse()).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
 
       {/* KPI tiles */}
@@ -141,21 +145,11 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
           <div className="stat-value stat-orange">{needsAction.length}</div>
           <div className="stat-label">Need Action</div>
         </div>
-        <div className="stat-card" style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 10, right: 10 }}>
-            <select className="form-select" style={{ padding: '2px 6px', fontSize: 10, width: 'auto' }} value={campaignPeriod} onChange={e => setCampaignPeriod(e.target.value)}>
-              {buildPeriodOptions(campaignMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+        <div className="stat-card">
           <div className="stat-value stat-green">{fmtMoney(filteredEarned)}</div>
           <div className="stat-label">Campaign Earnings</div>
         </div>
-        <div className="stat-card" style={{ position: 'relative' }}>
-          <div style={{ position: 'absolute', top: 10, right: 10 }}>
-            <select className="form-select" style={{ padding: '2px 6px', fontSize: 10, width: 'auto' }} value={rewardPeriod} onChange={e => setRewardPeriod(e.target.value)}>
-              {buildPeriodOptions(rewardMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
+        <div className="stat-card">
           <div className="stat-value stat-green">{fmtMoney(filteredRewardsPaid)}</div>
           <div className="stat-label">Rewards Paid to Me</div>
         </div>
