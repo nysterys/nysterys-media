@@ -125,12 +125,13 @@ export default function AdminOverview({ setActiveView }) {
   const totalPaidOut    = filtPayouts.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
   const totalPending    = invoices.filter(i => !isInKind(i.payment_method) && ['Not Invoiced', 'Invoiced', 'Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
   const totalFeesCampaign = filtInvoices.filter(i => !isInKind(i.payment_method)).reduce((s, i) => s + (i.processing_fee || 0), 0);
-  const totalInKind     = campaigns.filter(c => isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0), 0);
+  // Use separately-fetched invoices for in-kind (nested subquery may be empty if no invoice row)
+  const totalInKind     = invoices.filter(i => isInKind(i.payment_method)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
 
   // Reward KPIs filtered by period
   const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
   const rTotalGross    = filtRewards.reduce((s, e) => s + (e.gross_amount || 0), 0);
-  const rTotalReceived = filtRewards.filter(e => e.you_received).reduce((s, e) => s + (e.amount_received || e.invoice_amount || 0), 0);
+  const rTotalReceived = filtRewards.filter(e => e.you_received).reduce((s, e) => s + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0);
   const rTotalPaidOut  = filtRewards.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
   const rTotalPending  = filtRewards.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
   const rTotalFees     = filtRewards.reduce((s, e) => s + (e.processing_fee || 0), 0);

@@ -66,7 +66,7 @@ export default function RewardsView() {
   });
 
   const totalGross   = filtered.reduce((s, e) => s + (e.gross_amount || 0), 0);
-  const totalReceived = filtered.filter(e => e.you_received).reduce((s, e) => s + (e.amount_received || e.invoice_amount || 0), 0);
+  const totalReceived = filtered.filter(e => e.you_received).reduce((s, e) => s + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0);
   const totalPaidOut  = filtered.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
   const totalPending  = filtered.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
   const totalFees     = filtered.reduce((s, e) => s + (e.processing_fee || 0), 0);

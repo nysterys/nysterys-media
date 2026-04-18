@@ -55,7 +55,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
       `)
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false }),
-      supabase.from('reward_payout_summary').select('payout_status, payout_amount').eq('profile_id', profile.id),
+      supabase.from('reward_payout_summary').select('payout_status, payout_amount, period_month').eq('profile_id', profile.id),
     ]);
     setCampaigns(data || []);
     const rPaid = (rewardsRes.data || []).filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
