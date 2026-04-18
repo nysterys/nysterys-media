@@ -184,12 +184,17 @@ create table public.invoices (
   invoice_amount numeric(10,2),
   
   payment_status text default 'Not Invoiced' check (payment_status in (
-    'Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'
+    'Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed', 'In Kind'
   )),
   
   payment_received_date date,
   payment_method text, -- PayPal, Wire, Check, etc.
   payment_notes text,
+
+  -- In kind compensation (free goods, tickets, products — no cash)
+  is_in_kind boolean default false,
+  in_kind_value numeric(10,2),       -- fair market value for tax purposes
+  in_kind_description text,          -- what was received
   
   created_at timestamptz default now(),
   updated_at timestamptz default now()

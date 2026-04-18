@@ -5,7 +5,7 @@ import Comments from '../shared/Comments';
 import { format, parseISO } from 'date-fns';
 
 const CAMPAIGN_STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
-const PAYMENT_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'];
+const PAYMENT_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed', 'In Kind'];
 
 export default function CampaignsView() {
   const [campaigns, setCampaigns] = useState([]);
@@ -226,6 +226,7 @@ export default function CampaignsView() {
                   return !min || d.contracted_post_date < min ? d.contracted_post_date : min;
                 }, null);
                 const paymentStatus = c.invoices?.[0]?.payment_status;
+                const inKindValue = c.invoices?.[0]?.in_kind_value;
                 return (
                   <tr key={c.id} onClick={() => openDetail(c)}>
                     <td>
@@ -236,10 +237,20 @@ export default function CampaignsView() {
                     <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
                     <td>
                       <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
-                        {c.campaign_deliverables?.map(d => (
-                          <span key={d.id} className="badge badge-confirmed">{d.platform?.name || '?'}{d.quantity > 1 ? ` ×${d.quantity}` : ''}</span>
-                        ))}
-                        {(!c.campaign_deliverables || c.campaign_deliverables.length === 0) && <span className="text-muted">—</span>}
+                        {(() => {
+                          const counts = {};
+                          (c.campaign_deliverables || []).forEach(d => {
+                            const name = d.platform?.name || '?';
+                            counts[name] = (counts[name] || 0) + 1;
+                          });
+                          const entries = Object.entries(counts);
+                          if (entries.length === 0) return <span className="text-muted">—</span>;
+                          return entries.map(([name, count]) => (
+                            <span key={name} className="badge badge-confirmed">
+                              {name}{count > 1 ? ` ×${count}` : ''}
+                            </span>
+                          ));
+                        })()}
                       </div>
                     </td>
                     <td>{fmtDate(earliestPost)}</td>
@@ -253,7 +264,12 @@ export default function CampaignsView() {
                     <td><Badge status={c.status} /></td>
                     <td>
                       {paymentStatus
-                        ? <Badge status={paymentStatus} />
+                        ? <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <Badge status={paymentStatus} />
+                            {paymentStatus === 'In Kind' && inKindValue
+                              ? <span style={{ fontSize: 10, color: 'var(--purple, #9b59ff)' }}>{fmtMoney(inKindValue)} value</span>
+                              : null}
+                          </div>
                         : <span className="text-muted text-xs">No invoice</span>
                       }
                     </td>
@@ -1395,66 +1411,124 @@ function InvoiceTab({ campaign, onUpdated }) {
     payment_received_date: inv?.payment_received_date || '',
     payment_method: inv?.payment_method || '',
     payment_notes: inv?.payment_notes || '',
+    is_in_kind: inv?.is_in_kind || false,
+    in_kind_value: inv?.in_kind_value || '',
+    in_kind_description: inv?.in_kind_description || '',
   });
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setSaved(false); }
 
   async function save() {
     setSaving(true);
+    const payload = {
+      invoice_number: form.invoice_number || null,
+      invoice_date: form.invoice_date || null,
+      invoice_amount: form.invoice_amount ? parseFloat(form.invoice_amount) : null,
+      payment_status: form.payment_status,
+      payment_received_date: form.payment_received_date || null,
+      payment_method: form.payment_method || null,
+      payment_notes: form.payment_notes || null,
+      is_in_kind: form.is_in_kind,
+      in_kind_value: form.in_kind_value ? parseFloat(form.in_kind_value) : null,
+      in_kind_description: form.in_kind_description || null,
+    };
     if (inv) {
-      await supabase.from('invoices').update({
-        ...form,
-        invoice_amount: form.invoice_amount ? parseFloat(form.invoice_amount) : null,
-      }).eq('id', inv.id);
+      await supabase.from('invoices').update(payload).eq('id', inv.id);
     } else {
-      await supabase.from('invoices').insert({
-        campaign_id: campaign.id,
-        ...form,
-        invoice_amount: form.invoice_amount ? parseFloat(form.invoice_amount) : null,
-      });
+      await supabase.from('invoices').insert({ campaign_id: campaign.id, ...payload });
     }
     setSaving(false);
+    setSaved(true);
     onUpdated();
   }
 
+  const isInKind = form.is_in_kind || form.payment_status === 'In Kind';
+
   return (
     <div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Invoice #</label>
-          <input className="form-input" value={form.invoice_number} onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))} placeholder="INV-001" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Invoice Date</label>
-          <input className="form-input" type="date" value={form.invoice_date} onChange={e => setForm(f => ({ ...f, invoice_date: e.target.value }))} />
-        </div>
+      {/* In Kind toggle */}
+      <div style={{ marginBottom: 16, padding: '10px 14px', background: isInKind ? 'rgba(155,89,255,0.08)' : 'var(--surface)', border: `1px solid ${isInKind ? 'var(--purple, #9b59ff)' : 'var(--border)'}`, borderRadius: 6 }}>
+        <label className="checkbox-row" style={{ marginBottom: 0, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.is_in_kind} onChange={e => {
+            const checked = e.target.checked;
+            setF('is_in_kind', checked);
+            if (checked) setF('payment_status', 'In Kind');
+            else if (form.payment_status === 'In Kind') setF('payment_status', 'Not Invoiced');
+          }} />
+          <span style={{ fontWeight: 600, fontSize: 13 }}>In Kind compensation</span>
+          <span className="text-muted text-xs" style={{ marginLeft: 8 }}>No cash — free goods, tickets, products, etc.</span>
+        </label>
       </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Invoice Amount ($)</label>
-          <input className="form-input" type="number" value={form.invoice_amount} onChange={e => setForm(f => ({ ...f, invoice_amount: e.target.value }))} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Payment Status</label>
-          <select className="form-select" value={form.payment_status} onChange={e => setForm(f => ({ ...f, payment_status: e.target.value }))}>
-            {PAYMENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-          </select>
-        </div>
+
+      {isInKind ? (
+        <>
+          <div style={{ fontSize: 12, color: 'var(--purple, #9b59ff)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>In Kind Details</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Fair Market Value ($) *</label>
+              <input className="form-input" type="number" value={form.in_kind_value} onChange={e => setF('in_kind_value', e.target.value)} placeholder="0.00" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Received Date</label>
+              <input className="form-input" type="date" value={form.payment_received_date} onChange={e => setF('payment_received_date', e.target.value)} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description of goods / compensation</label>
+            <textarea className="form-textarea" value={form.in_kind_description} onChange={e => setF('in_kind_description', e.target.value)} placeholder="e.g. 4× concert tickets (face value $85 each), 1× artist meet & greet pass..." style={{ minHeight: 80 }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <textarea className="form-textarea" value={form.payment_notes} onChange={e => setF('payment_notes', e.target.value)} style={{ minHeight: 50 }} />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Invoice #</label>
+              <input className="form-input" value={form.invoice_number} onChange={e => setF('invoice_number', e.target.value)} placeholder="INV-001" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Invoice Date</label>
+              <input className="form-input" type="date" value={form.invoice_date} onChange={e => setF('invoice_date', e.target.value)} />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Invoice Amount ($)</label>
+              <input className="form-input" type="number" value={form.invoice_amount} onChange={e => setF('invoice_amount', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Payment Status</label>
+              <select className="form-select" value={form.payment_status} onChange={e => setF('payment_status', e.target.value)}>
+                {PAYMENT_STATUSES.filter(s => s !== 'In Kind').map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Payment Received Date</label>
+              <input className="form-input" type="date" value={form.payment_received_date} onChange={e => setF('payment_received_date', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Payment Method</label>
+              <input className="form-input" value={form.payment_method} onChange={e => setF('payment_method', e.target.value)} placeholder="PayPal, Wire, Check..." />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Payment Notes</label>
+            <textarea className="form-textarea" value={form.payment_notes} onChange={e => setF('payment_notes', e.target.value)} style={{ minHeight: 60 }} />
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center gap-12">
+        <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+        {saved && <span style={{ fontSize: 12, color: 'var(--green)' }}>Saved ✓</span>}
       </div>
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Payment Received Date</label>
-          <input className="form-input" type="date" value={form.payment_received_date} onChange={e => setForm(f => ({ ...f, payment_received_date: e.target.value }))} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Payment Method</label>
-          <input className="form-input" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder="PayPal, Wire, Check..." />
-        </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Payment Notes</label>
-        <textarea className="form-textarea" value={form.payment_notes} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} style={{ minHeight: 60 }} />
-      </div>
-      <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Invoice'}</button>
     </div>
   );
 }
