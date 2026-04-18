@@ -699,8 +699,14 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
         <div key={i} className="deliverable-card" style={{ marginBottom: 10 }}>
           <div className="deliverable-card-header">
             <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Split {i + 1}</span>
-            {!sf.id && splitForms.length > 1 && (
-              <button className="btn btn-ghost btn-sm" onClick={() => setSplitForms(sf2 => sf2.filter((_, idx) => idx !== i))}>Remove</button>
+            {splitForms.length > 1 && (
+              <button className="btn btn-ghost btn-sm" onClick={async () => {
+                if (sf.id) {
+                  if (!window.confirm('Remove this split? This cannot be undone.')) return;
+                  await supabase.from('payout_splits').delete().eq('id', sf.id);
+                }
+                setSplitForms(sf2 => sf2.filter((_, idx) => idx !== i));
+              }}>Remove</button>
             )}
           </div>
 
