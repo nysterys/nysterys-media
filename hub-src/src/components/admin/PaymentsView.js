@@ -10,6 +10,14 @@ const SPLIT_STATUSES = ['Pending', 'Sent', 'Cleared', 'Failed'];
 const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
 const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
+function openPopup(url) {
+  if (!url) return;
+  const w = 480, h = 720;
+  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
+}
+
 async function getSignedUrl(bucket, path) {
   const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
   return data?.signedUrl || null;
@@ -290,7 +298,7 @@ function InvoiceForm({ invoice, row, onUpdated }) {
 
   async function viewReceipt() {
     const url = await getSignedUrl('payment-receipts', receiptPath);
-    if (url) window.open(url, '_blank');
+    if (url) openPopup(url);
   }
 
   async function downloadReceipt() {

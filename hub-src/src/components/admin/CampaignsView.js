@@ -7,6 +7,14 @@ import { format, parseISO } from 'date-fns';
 const CAMPAIGN_STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
 const PAYMENT_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed', 'In Kind'];
 
+function openPopup(url) {
+  if (!url) return;
+  const w = 480, h = 720;
+  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
+  const top = Math.round(window.screenY + (window.outerHeight - h) / 2);
+  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
+}
+
 export default function CampaignsView() {
   const [campaigns, setCampaigns] = useState([]);
   const [agencies, setAgencies] = useState([]);
@@ -1093,10 +1101,10 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
           {/* TikTok video preview */}
           {d.cover_image_url && (
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
-              <a href={d.post_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                style={{ flexShrink: 0, display: 'block', width: 72, height: 96, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+              <div onClick={e => { e.stopPropagation(); openPopup(d.post_url); }}
+                style={{ flexShrink: 0, display: 'block', width: 72, height: 96, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)', cursor: 'pointer' }}>
                 <img src={d.cover_image_url} alt="video thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </a>
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {d.video_title && (
                   <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, marginBottom: 4, color: 'var(--text)', wordBreak: 'break-word' }}>
@@ -1120,7 +1128,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
               <div><span className="text-muted">Posted: </span><span style={{ color: 'var(--green)' }}>{fmtDate(d.actual_post_date)}</span></div>
             )}
             {d.post_url && (
-              <a href={d.post_url} target="_blank" rel="noreferrer" className="link text-sm" onClick={e => e.stopPropagation()}>View Post ↗</a>
+              <span className="link text-sm" style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); openPopup(d.post_url); }}>View Post ↗</span>
             )}
           </div>
 
@@ -1148,7 +1156,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
                   </div>
                 </div>
                 {r.submitted_at && <div className="text-sm text-muted">Submitted: {fmtDate(r.submitted_at?.split('T')[0])}</div>}
-                {r.draft_url && <a href={r.draft_url} target="_blank" rel="noreferrer" className="link text-sm">View Draft ↗</a>}
+                {r.draft_url && <span className="link text-sm" style={{ cursor: "pointer" }} onClick={() => openPopup(r.draft_url)}>View Draft ↗</span>}
                 {r.draft_notes && <div className="text-sm mt-4">{r.draft_notes}</div>}
                 {r.agency_feedback && (
                   <div className="mt-8" style={{ background: 'var(--surface)', padding: '8px 10px', borderRadius: 4, fontSize: 12 }}>
@@ -1520,7 +1528,7 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
             />
             {form.post_url && (
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <a href={form.post_url} target="_blank" rel="noreferrer" className="link">View post ↗</a>
+                <span className="link" style={{ cursor: "pointer" }} onClick={() => openPopup(form.post_url)}>View post ↗</span>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
                   onClick={() => setForm(f => ({ ...f, post_url: '', actual_post_date: '' }))}>Clear</button>
               </div>
@@ -1636,7 +1644,7 @@ function InvoiceTab({ campaign, onUpdated }) {
 
   async function viewReceipt() {
     const url = await getDownloadUrl('payment-receipts', receiptPath);
-    if (url) window.open(url, '_blank');
+    if (url) openPopup(url);
   }
 
   async function downloadReceipt() {
@@ -1811,7 +1819,7 @@ function FilesTab({ campaign }) {
 
   async function viewFile(f) {
     const url = await getDownloadUrl('campaign-files', f.file_path);
-    if (url) window.open(url, '_blank');
+    if (url) openPopup(url);
   }
 
   async function downloadFile(f) {
@@ -2097,7 +2105,7 @@ export function MarkPostedModal({ deliverable, campaign, onClose, onSaved }) {
             />
             {postUrl && (
               <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
-                <a href={postUrl} target="_blank" rel="noreferrer" className="link">View post ↗</a>
+                <span className="link" style={{ cursor: "pointer" }} onClick={() => openPopup(postUrl)}>View post ↗</span>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
                   onClick={() => { setPostUrl(''); }}>Clear</button>
               </div>
