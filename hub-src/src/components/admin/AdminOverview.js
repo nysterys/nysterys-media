@@ -1,52 +1,97 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import Badge from '../shared/Badge';
+import { fmtDate, fmtMoney } from '../../utils/format';
+
+function isInKind(paymentMethod) {
+  return (paymentMethod || '').toLowerCase() === 'in kind';
+}
 
 export default function AdminOverview({ setActiveView }) {
-  const [stats, setStats] = useState({
-    totalCampaigns: 0,
-    activeCampaigns: 0,
-    pendingPayments: 0,
-    overduePayments: 0,
-    totalEarned: 0,
-    totalPending: 0,
-    recentCampaigns: [],
-  });
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchStats(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  async function fetchStats() {
-    const [campaigns, invoices] = await Promise.all([
-      supabase.from('campaigns').select('*, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name), invoices(payment_status, invoice_amount)').order('created_at', { ascending: false }),
-      supabase.from('invoices').select('payment_status, invoice_amount'),
+  async function fetchAll() {
+    const [campaignsRes, invoicesRes, payoutsRes] = await Promise.all([
+      supabase.from('campaigns').select(`
+        *, agency:agencies(name),
+        creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
+        campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name)),
+        invoices(payment_status, invoice_amount, payment_method),
+        creator_payouts(payout_status, payout_amount)
+      `).order('created_at', { ascending: false }),
+      supabase.from('invoices').select('payment_status, invoice_amount, payment_method, campaign_id'),
+      supabase.from('creator_payouts').select('payout_status, payout_amount, campaign_id'),
     ]);
 
-    const c = campaigns.data || [];
-    const inv = invoices.data || [];
+    const campaigns = campaignsRes.data || [];
+    const invoices  = invoicesRes.data || [];
+    const payouts   = payoutsRes.data || [];
 
-    const totalEarned = inv.filter(i => i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
-    const totalPending = inv.filter(i => ['Invoiced', 'Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
+    // KPI stats
+    const totalPaid    = invoices.filter(i => !isInKind(i.payment_method) && i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
+    const totalPending = invoices.filter(i => !isInKind(i.payment_method) && ['Invoiced', 'Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
+    const overdue      = invoices.filter(i => i.payment_status === 'Overdue').length;
 
-    setStats({
-      totalCampaigns: c.length,
-      activeCampaigns: c.filter(x => x.status === 'Active').length,
-      pendingPayments: inv.filter(i => ['Invoiced', 'Pending'].includes(i.payment_status)).length,
-      overduePayments: inv.filter(i => i.payment_status === 'Overdue').length,
-      totalEarned,
-      totalPending,
-      recentCampaigns: c.slice(0, 6),
+    // Active campaigns
+    const active = campaigns.filter(c => c.status === 'Active');
+
+    // Needs attention: deliverables in active campaigns that are Not Started or Revisions Requested
+    const needsAttention = campaigns
+      .filter(c => c.status === 'Active' || c.status === 'Confirmed')
+      .flatMap(c =>
+        (c.campaign_deliverables || [])
+          .filter(d => ['Not Started', 'Revisions Requested'].includes(d.draft_status))
+          .map(d => ({ ...d, campaign: c }))
+      );
+
+    // Group by campaign
+    const needsAttentionGrouped = Object.values(
+      needsAttention.reduce((groups, d) => {
+        const key = d.campaign.id;
+        if (!groups[key]) groups[key] = { campaign: d.campaign, items: [] };
+        groups[key].items.push(d);
+        return groups;
+      }, {})
+    );
+
+    // Agency payments pending (not in-kind, not paid)
+    const agencyPending = campaigns.filter(c => {
+      const inv = c.invoices?.[0];
+      if (!inv || isInKind(inv.payment_method)) return false;
+      return ['Not Invoiced', 'Invoiced', 'Pending'].includes(inv.payment_status) && c.status !== 'Cancelled';
+    });
+
+    // Creator payouts pending
+    const payoutsPending = campaigns.filter(c => {
+      const inv = c.invoices?.[0];
+      if (isInKind(inv?.payment_method)) return false;
+      const payout = c.creator_payouts?.[0];
+      return !payout || (payout.payout_status !== 'Paid');
+    }).filter(c => {
+      // Only show if agency has at least invoiced (some money is coming)
+      const inv = c.invoices?.[0];
+      return inv && ['Invoiced', 'Pending', 'Paid'].includes(inv.payment_status) && c.status !== 'Cancelled';
+    });
+
+    setData({
+      totalCampaigns: campaigns.length,
+      activeCampaigns: active.length,
+      totalPaid, totalPending, overdue,
+      active,
+      needsAttentionGrouped,
+      agencyPending,
+      payoutsPending,
     });
     setLoading(false);
   }
 
-  function fmt(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n); }
-
-  const statusColor = (s) => {
-    const map = { 'Negotiating': 'stat-accent', 'Active': 'stat-green', 'Completed': 'stat-green', 'Cancelled': 'stat-red', 'Confirmed': 'stat-accent' };
-    return map[s] || '';
-  };
-
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
+
+  const { totalCampaigns, activeCampaigns, totalPaid, totalPending, overdue,
+          active, needsAttentionGrouped, agencyPending, payoutsPending } = data;
 
   return (
     <div className="page">
@@ -57,85 +102,164 @@ export default function AdminOverview({ setActiveView }) {
         </div>
       </div>
 
+      {/* KPI tiles */}
       <div className="stats-row">
-        <div className="stat-card">
-          <div className={`stat-value`}>{stats.totalCampaigns}</div>
-          <div className="stat-label">Total Campaigns</div>
-        </div>
-        <div className="stat-card">
-          <div className={`stat-value stat-accent`}>{stats.activeCampaigns}</div>
-          <div className="stat-label">Active Now</div>
-        </div>
-        <div className="stat-card">
-          <div className={`stat-value stat-green`}>{fmt(stats.totalEarned)}</div>
-          <div className="stat-label">Total Paid</div>
-        </div>
-        <div className="stat-card">
-          <div className={`stat-value stat-orange`}>{fmt(stats.totalPending)}</div>
-          <div className="stat-label">Pending Payment</div>
-        </div>
-        <div className="stat-card">
-          <div className={`stat-value ${stats.overduePayments > 0 ? 'stat-red' : ''}`}>{stats.overduePayments}</div>
-          <div className="stat-label">Overdue</div>
-        </div>
+        <div className="stat-card"><div className="stat-value">{totalCampaigns}</div><div className="stat-label">Total Campaigns</div></div>
+        <div className="stat-card"><div className="stat-value stat-accent">{activeCampaigns}</div><div className="stat-label">Active Now</div></div>
+        <div className="stat-card"><div className="stat-value stat-green">{fmtMoney(totalPaid)}</div><div className="stat-label">Total Paid In</div></div>
+        <div className="stat-card"><div className="stat-value stat-orange">{fmtMoney(totalPending)}</div><div className="stat-label">Agency Pending</div></div>
+        <div className="stat-card"><div className={`stat-value ${overdue > 0 ? 'stat-red' : ''}`}>{overdue}</div><div className="stat-label">Overdue</div></div>
       </div>
 
-      <div className="card">
-        <div className="flex items-center justify-between mb-12">
-          <div className="card-title">RECENT CAMPAIGNS</div>
-          <button className="btn btn-ghost btn-sm" onClick={() => setActiveView('campaigns')}>View All →</button>
-        </div>
-        {stats.recentCampaigns.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">◎</div>
-            <div className="empty-state-title">No campaigns yet</div>
-            <div className="empty-state-text">Create your first campaign to get started</div>
+      {/* Needs attention */}
+      {needsAttentionGrouped.length > 0 && (
+        <div className="card mb-16" style={{ borderColor: 'rgba(255,156,58,0.3)' }}>
+          <div className="flex items-center justify-between mb-12">
+            <div className="card-title" style={{ color: 'var(--orange)' }}>⚠ NEEDS ATTENTION</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setActiveView('campaigns')}>Go to Campaigns →</button>
           </div>
-        ) : (
+          {needsAttentionGrouped.map(({ campaign, items }) => (
+            <div key={campaign.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, cursor: 'pointer' }} onClick={() => setActiveView('campaigns')}>
+                {campaign.campaign_name}
+                <span className="text-muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+                  {campaign.creator?.creator_name || campaign.creator?.full_name} · {campaign.brand_name}
+                </span>
+              </div>
+              {items.map(d => (
+                <div key={d.id} className="flex items-center justify-between" style={{ padding: '5px 0 5px 12px', borderLeft: '2px solid rgba(255,156,58,0.3)' }}>
+                  <span className="text-muted text-sm">{d.platform?.name}{d.deliverable_type?.name ? ` · ${d.deliverable_type.name}` : ''}</span>
+                  <div className="flex items-center gap-12">
+                    <Badge status={d.draft_status} />
+                    {d.contracted_post_date && <span className="text-sm text-muted">Due {fmtDate(d.contracted_post_date)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Active campaigns table */}
+      {active.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="flex items-center justify-between mb-10">
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)' }}>ACTIVE CAMPAIGNS</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setActiveView('campaigns')}>View All →</button>
+          </div>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Campaign</th>
-                  <th>Creator</th>
-                  <th>Agency</th>
-                  <th>Rate</th>
-                  <th>Status</th>
-                  <th>Payment</th>
+                  <th>Campaign</th><th>Creator</th><th>Brand</th><th>Posts</th><th>Next Deadline</th><th>Progress</th><th>Agency Status</th><th>Payout</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.recentCampaigns.map(c => (
-                  <tr key={c.id} onClick={() => setActiveView('campaigns')}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{c.campaign_name}</div>
-                      <div className="text-muted text-xs">{c.brand_name}</div>
-                    </td>
-                    <td>{c.creator?.creator_name || c.creator?.full_name}</td>
+                {active.map(c => {
+                  const deliverables = c.campaign_deliverables || [];
+                  const posted = deliverables.filter(d => d.draft_status === 'Posted').length;
+                  const total  = deliverables.length;
+                  const next   = deliverables.filter(d => d.contracted_post_date && d.draft_status !== 'Posted').sort((a, b) => a.contracted_post_date > b.contracted_post_date ? 1 : -1)[0];
+                  const inv    = c.invoices?.[0];
+                  const payout = c.creator_payouts?.[0];
+                  return (
+                    <tr key={c.id} onClick={() => setActiveView('campaigns')} style={{ cursor: 'pointer' }}>
+                      <td><div style={{ fontWeight: 500 }}>{c.campaign_name}</div><div className="text-muted text-xs">{c.brand_name}</div></td>
+                      <td>{c.creator?.creator_name || c.creator?.full_name || '—'}</td>
+                      <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
+                      <td>{total > 0 ? `${posted}/${total}` : <span className="text-muted">—</span>}</td>
+                      <td>{next ? <span style={{ fontWeight: 500 }}>{fmtDate(next.contracted_post_date)}</span> : <span className="text-muted">—</span>}</td>
+                      <td>
+                        {total > 0 ? (
+                          <div className="flex items-center gap-8">
+                            <div style={{ width: 60, height: 4, background: 'var(--surface3)', borderRadius: 2 }}>
+                              <div style={{ width: `${(posted / total) * 100}%`, height: '100%', background: posted === total ? 'var(--green)' : 'var(--orange)', borderRadius: 2 }} />
+                            </div>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{Math.round((posted / total) * 100)}%</span>
+                          </div>
+                        ) : <span className="text-muted">—</span>}
+                      </td>
+                      <td>{isInKind(inv?.payment_method) ? <span style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text-muted)' }}>In Kind</span> : inv ? <Badge status={inv.payment_status} /> : <span className="text-muted text-xs">No invoice</span>}</td>
+                      <td>{isInKind(inv?.payment_method) ? <span style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text-muted)' }}>N/A</span> : payout ? <Badge status={payout.payout_status} /> : <span className="text-muted text-xs">—</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Agency payments pending */}
+      {agencyPending.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="flex items-center justify-between mb-10">
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)' }}>AGENCY PAYMENTS PENDING</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setActiveView('payments')}>Go to Payments →</button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Campaign</th><th>Creator</th><th>Agency</th><th>Rate</th><th>Invoice Status</th></tr>
+              </thead>
+              <tbody>
+                {agencyPending.map(c => (
+                  <tr key={c.id} onClick={() => setActiveView('payments')} style={{ cursor: 'pointer' }}>
+                    <td><div style={{ fontWeight: 500 }}>{c.campaign_name}</div><div className="text-muted text-xs">{c.brand_name}</div></td>
+                    <td>{c.creator?.creator_name || c.creator?.full_name || '—'}</td>
                     <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
-                    <td>
-                      {c.contracted_rate
-                        ? <span style={{ color: 'var(--accent)' }}>${c.contracted_rate.toLocaleString()}</span>
-                        : <span className="text-muted">TBD</span>
-                      }
-                    </td>
-                    <td>
-                      <span className={`badge badge-${c.status?.toLowerCase().replace(' ', '-')}`}>{c.status}</span>
-                    </td>
-                    <td>
-                      {c.invoices?.[0] ? (
-                        <span className={`badge badge-${c.invoices[0].payment_status?.toLowerCase().replace(' ', '-')}`}>{c.invoices[0].payment_status}</span>
-                      ) : (
-                        <span className="text-muted text-xs">No invoice</span>
-                      )}
-                    </td>
+                    <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(c.contracted_rate)}</td>
+                    <td><Badge status={c.invoices?.[0]?.payment_status || 'Not Invoiced'} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Creator payouts pending */}
+      {payoutsPending.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="flex items-center justify-between mb-10">
+            <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)' }}>CREATOR PAYOUTS PENDING</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setActiveView('payments')}>Go to Payments →</button>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Campaign</th><th>Creator</th><th>Agency Status</th><th>Contracted Rate</th><th>Payout Status</th></tr>
+              </thead>
+              <tbody>
+                {payoutsPending.map(c => {
+                  const inv    = c.invoices?.[0];
+                  const payout = c.creator_payouts?.[0];
+                  return (
+                    <tr key={c.id} onClick={() => setActiveView('payments')} style={{ cursor: 'pointer' }}>
+                      <td><div style={{ fontWeight: 500 }}>{c.campaign_name}</div><div className="text-muted text-xs">{c.brand_name}</div></td>
+                      <td>{c.creator?.creator_name || c.creator?.full_name || '—'}</td>
+                      <td><Badge status={inv?.payment_status || 'Not Invoiced'} /></td>
+                      <td style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(c.contracted_rate)}</td>
+                      <td>{payout ? <Badge status={payout.payout_status} /> : <span className="text-muted text-xs">Not created</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* All clear */}
+      {needsAttentionGrouped.length === 0 && active.length === 0 && agencyPending.length === 0 && payoutsPending.length === 0 && (
+        <div className="card">
+          <div className="empty-state" style={{ padding: '30px 20px' }}>
+            <div className="empty-state-icon">✓</div>
+            <div className="empty-state-title">All clear</div>
+            <div className="empty-state-text">No active campaigns or pending payments</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
