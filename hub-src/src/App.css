@@ -134,7 +134,7 @@ th { text-align: left; padding: 10px 16px; font-size: 9px; font-weight: 600; tex
 td { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--white); font-size: 13px; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr { cursor: pointer; transition: background var(--transition); }
-tbody tr:nth-child(even) { background: rgba(255,255,255,0.05); }
+tbody tr:nth-child(even) { background: var(--surface); }
 tbody tr:hover { background: var(--surface2); }
 
 /* Badges */
