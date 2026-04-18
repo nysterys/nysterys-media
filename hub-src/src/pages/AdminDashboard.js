@@ -11,12 +11,15 @@ import AnalyticsView from '../components/admin/AnalyticsView';
 import TikTokAccountsView from '../components/admin/TikTokAccountsView';
 import PaymentDestinationsView from '../components/admin/PaymentDestinationsView';
 
+import CalendarView from '../components/admin/CalendarView';
+
 const NAV = [
   {
     label: null,
     items: [
       { view: 'overview', icon: '◈', label: 'Overview' },
       { view: 'campaigns', icon: '◎', label: 'Campaigns' },
+      { view: 'calendar', icon: '▦', label: 'Calendar' },
       { view: 'payments', icon: '◇', label: 'Payments' },
       { view: 'analytics', icon: '◉', label: 'Analytics' },
     ]
@@ -41,6 +44,7 @@ export default function AdminDashboard() {
     switch (activeView) {
       case 'overview': return <AdminOverview setActiveView={setActiveView} />;
       case 'campaigns': return <CampaignsView />;
+      case 'calendar': return <CalendarView />;
       case 'payments': return <PaymentsView />;
       case 'analytics': return <AnalyticsView />;
       case 'agencies': return <AgenciesView />;
