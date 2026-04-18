@@ -1186,6 +1186,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
       {showMarkPosted && (
         <MarkPostedModal
           deliverable={showMarkPosted}
+          campaign={campaign}
           onClose={() => setShowMarkPosted(null)}
           onSaved={() => { setShowMarkPosted(null); onUpdated(); }}
         />
@@ -1194,6 +1195,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
       {editingDeliverable && (
         <EditDeliverableModal
           deliverable={editingDeliverable}
+          campaign={campaign}
           platforms={platforms}
           deliverableTypes={deliverableTypes}
           onClose={() => setEditingDeliverable(null)}
@@ -1302,7 +1304,117 @@ function EditRevisionModal({ revision, onClose, onSaved }) {
   );
 }
 
-function EditDeliverableModal({ deliverable, platforms, deliverableTypes, onClose, onSaved }) {
+// ============================================================
+// Video Picker — loads available TikTok videos for a campaign's creator,
+// filtered to the campaign date window, excluding already-assigned videos
+// ============================================================
+function VideoPickerSelect({ campaign, currentPostUrl, onSelect }) {
+  const [videos, setVideos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadVideos();
+  }, []);
+
+  async function loadVideos() {
+    setLoading(true);
+
+    // 1. Find the creator's tiktok_username
+    const creatorId = campaign.creator_profile_id;
+    if (!creatorId) { setLoading(false); return; }
+
+    const { data: acct } = await supabase
+      .from('tiktok_accounts')
+      .select('tiktok_username')
+      .eq('profile_id', creatorId)
+      .eq('is_active', true)
+      .single();
+
+    if (!acct?.tiktok_username) { setLoading(false); return; }
+
+    // 2. Fetch all videos for this creator
+    let query = supabase
+      .from('tiktok_video_insights_view')
+      .select('video_id, video_title, create_time, share_url')
+      .eq('tiktok_username', acct.tiktok_username)
+      .order('create_time', { ascending: false });
+
+    // Filter to campaign date window if dates are set
+    if (campaign.campaign_start_date) {
+      query = query.gte('create_time', campaign.campaign_start_date);
+    }
+    if (campaign.campaign_end_date) {
+      // Add one day so end date is inclusive
+      const end = new Date(campaign.campaign_end_date);
+      end.setDate(end.getDate() + 1);
+      query = query.lte('create_time', end.toISOString().split('T')[0]);
+    }
+
+    const { data: allVideos } = await query;
+
+    // 3. Get all post_urls already assigned to other deliverables (excluding this campaign's own deliverables with no URL)
+    const { data: usedRows } = await supabase
+      .from('campaign_deliverables')
+      .select('post_url')
+      .neq('campaign_id', campaign.id)
+      .not('post_url', 'is', null);
+
+    const usedUrls = new Set((usedRows || []).map(r => r.post_url));
+
+    // 4. Filter out already-used videos (match by video_id in URL)
+    const available = (allVideos || []).filter(v => {
+      // Keep the currently selected video even if it's already "used" (it's this deliverable's own)
+      if (currentPostUrl && currentPostUrl.includes(v.video_id)) return true;
+      // Exclude if any used URL contains this video_id
+      return ![...usedUrls].some(url => url && url.includes(v.video_id));
+    });
+
+    setVideos(available);
+    setLoading(false);
+  }
+
+  const fmtDate = (d) => {
+    if (!d) return '';
+    try { return format(parseISO(d.includes('T') ? d : d + 'T00:00:00'), 'MMM d'); }
+    catch { return d; }
+  };
+
+  // Find current selection
+  const currentVideoId = videos.find(v => currentPostUrl?.includes(v.video_id))?.video_id || '';
+
+  function handleChange(e) {
+    const videoId = e.target.value;
+    if (!videoId) { onSelect('', ''); return; }
+    const video = videos.find(v => v.video_id === videoId);
+    if (!video) return;
+    const url = video.share_url || `https://www.tiktok.com/video/${video.video_id}`;
+    const postDate = video.create_time
+      ? (video.create_time.includes('T') ? video.create_time.split('T')[0] : video.create_time)
+      : '';
+    onSelect(url, postDate);
+  }
+
+  if (loading) return <div className="text-muted text-sm" style={{ padding: '8px 0' }}>Loading videos...</div>;
+  if (videos.length === 0) return (
+    <div className="text-muted text-sm" style={{ padding: '8px 0' }}>
+      No unassigned videos found within the campaign date window.
+      {!campaign.campaign_start_date && !campaign.campaign_end_date && ' (No campaign dates set — showing all videos.)'}
+    </div>
+  );
+
+  return (
+    <select className="form-select" value={currentVideoId} onChange={handleChange}>
+      <option value="">— Select a video —</option>
+      {videos.map(v => (
+        <option key={v.video_id} value={v.video_id}>
+          {fmtDate(v.create_time)} · {v.video_title ? (v.video_title.length > 60 ? v.video_title.slice(0, 60) + '…' : v.video_title) : v.video_id}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTypes, onClose, onSaved }) {
   const [form, setForm] = useState({
     platform_id: deliverable.platform_id || '',
     deliverable_type_id: deliverable.deliverable_type_id || '',
@@ -1327,7 +1439,6 @@ function EditDeliverableModal({ deliverable, platforms, deliverableTypes, onClos
       post_url: form.post_url || null,
       draft_status: form.draft_status,
     };
-    // If marking posted and no posted_at yet, set it
     if (form.draft_status === 'Posted' && !deliverable.posted_at) {
       update.posted_at = new Date().toISOString();
     }
@@ -1387,8 +1498,24 @@ function EditDeliverableModal({ deliverable, platforms, deliverableTypes, onClos
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Post URL</label>
-            <input className="form-input" value={form.post_url} onChange={e => setForm(f => ({ ...f, post_url: e.target.value }))} placeholder="https://www.tiktok.com/..." />
+            <label className="form-label">TikTok Post</label>
+            <VideoPickerSelect
+              campaign={campaign}
+              currentPostUrl={form.post_url}
+              onSelect={(url, postDate) => setForm(f => ({
+                ...f,
+                post_url: url,
+                actual_post_date: postDate || f.actual_post_date,
+                draft_status: url ? 'Posted' : f.draft_status,
+              }))}
+            />
+            {form.post_url && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <a href={form.post_url} target="_blank" rel="noreferrer" className="link">View post ↗</a>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
+                  onClick={() => setForm(f => ({ ...f, post_url: '', actual_post_date: '' }))}>Clear</button>
+              </div>
+            )}
           </div>
         </div>
         <div className="modal-footer">
@@ -1707,9 +1834,9 @@ export function AddRevisionModal({ deliverable, onClose, onSaved, isAdmin = fals
   );
 }
 
-export function MarkPostedModal({ deliverable, onClose, onSaved }) {
+export function MarkPostedModal({ deliverable, campaign, onClose, onSaved }) {
   const [postUrl, setPostUrl] = useState(deliverable.post_url || '');
-  const [postDate, setPostDate] = useState(new Date().toISOString().split('T')[0]);
+  const [postDate, setPostDate] = useState(deliverable.actual_post_date || new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1728,15 +1855,29 @@ export function MarkPostedModal({ deliverable, onClose, onSaved }) {
 
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
+      <div className="modal" style={{ maxWidth: 460 }}>
         <div className="modal-header">
           <div className="modal-title" style={{ fontSize: 18 }}>MARK AS POSTED</div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
-            <label className="form-label">Post URL</label>
-            <input className="form-input" value={postUrl} onChange={e => setPostUrl(e.target.value)} placeholder="https://www.tiktok.com/..." />
+            <label className="form-label">Select TikTok Post</label>
+            <VideoPickerSelect
+              campaign={campaign}
+              currentPostUrl={postUrl}
+              onSelect={(url, date) => {
+                setPostUrl(url);
+                if (date) setPostDate(date);
+              }}
+            />
+            {postUrl && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
+                <a href={postUrl} target="_blank" rel="noreferrer" className="link">View post ↗</a>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
+                  onClick={() => { setPostUrl(''); }}>Clear</button>
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Actual Post Date</label>
@@ -1745,7 +1886,7 @@ export function MarkPostedModal({ deliverable, onClose, onSaved }) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Confirm Posted'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !postUrl}>{saving ? 'Saving...' : 'Confirm Posted'}</button>
         </div>
       </div>
     </div>
