@@ -174,7 +174,7 @@ export default function CreatorPayments() {
                             <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
                             <div className="text-muted" style={{ fontSize: 10 }}>
                               {dest?.account_type === 'Other'
-                                ? dest?.memo ? dest.memo.slice(0, 40) + (dest.memo.length > 40 ? '…' : '') : 'Other'
+                                ? s.notes ? s.notes.slice(0, 50) + (s.notes.length > 50 ? '…' : '') : 'Other'
                                 : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`}
                             </div>
                           </td>
@@ -391,7 +391,7 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                               </div>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                                 {dest?.account_type === 'Other'
-                                  ? dest?.memo ? dest.memo.slice(0, 50) + (dest.memo.length > 50 ? '…' : '') : 'Other'
+                                  ? s.notes ? s.notes.slice(0, 50) + (s.notes.length > 50 ? '…' : '') : 'Other'
                                   : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`}
                               </div>
                             </div>
