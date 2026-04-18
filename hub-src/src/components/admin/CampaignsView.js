@@ -607,7 +607,7 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
       </div>
 
       <div className="tabs" style={{ padding: '0 24px' }}>
-        {['deliverables', 'details', 'invoice', 'comments'].map(t => (
+        {['deliverables', 'details', 'invoice', 'files', 'comments'].map(t => (
           <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </div>
@@ -630,6 +630,10 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
 
         {tab === 'invoice' && (
           <InvoiceTab campaign={c} onUpdated={onUpdated} />
+        )}
+
+        {tab === 'files' && (
+          <FilesTab campaign={c} />
         )}
 
         {tab === 'comments' && (
@@ -1532,6 +1536,32 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
   );
 }
 
+// ============================================================
+// File helpers
+// ============================================================
+function fileIcon(type) {
+  if (!type) return '📄';
+  if (type.startsWith('image/')) return '🖼';
+  if (type === 'application/pdf') return '📋';
+  if (type.includes('word') || type.includes('document')) return '📝';
+  if (type.startsWith('video/')) return '🎬';
+  if (type.startsWith('audio/')) return '🎵';
+  if (type.includes('zip') || type.includes('rar')) return '🗜';
+  return '📄';
+}
+
+function fmtBytes(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+async function getDownloadUrl(bucket, path) {
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
+  return data?.signedUrl || null;
+}
+
 function InvoiceTab({ campaign, onUpdated }) {
   const inv = campaign.invoices?.[0];
   const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
@@ -1549,6 +1579,9 @@ function InvoiceTab({ campaign, onUpdated }) {
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [receiptPath, setReceiptPath] = useState(inv?.receipt_path || null);
+  const [receiptName, setReceiptName] = useState(inv?.receipt_name || null);
 
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setSaved(false); }
 
@@ -1573,6 +1606,53 @@ function InvoiceTab({ campaign, onUpdated }) {
     }
     setSaving(false);
     setSaved(true);
+    onUpdated();
+  }
+
+  async function uploadReceipt(file) {
+    if (!file) return;
+    // Ensure invoice exists first
+    let invoiceId = inv?.id;
+    if (!invoiceId) {
+      const { data: newInv } = await supabase.from('invoices').insert({
+        campaign_id: campaign.id,
+        payment_status: form.payment_status || 'Not Invoiced',
+      }).select().single();
+      invoiceId = newInv?.id;
+      if (!invoiceId) return;
+    }
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const path = `receipts/${invoiceId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('payment-receipts').upload(path, file, { upsert: true });
+    if (!error) {
+      await supabase.from('invoices').update({ receipt_path: path, receipt_name: file.name }).eq('id', invoiceId);
+      setReceiptPath(path);
+      setReceiptName(file.name);
+      onUpdated();
+    }
+    setUploading(false);
+  }
+
+  async function viewReceipt() {
+    const url = await getDownloadUrl('payment-receipts', receiptPath);
+    if (url) window.open(url, '_blank');
+  }
+
+  async function downloadReceipt() {
+    const url = await getDownloadUrl('payment-receipts', receiptPath);
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url; a.download = receiptName || 'receipt';
+    a.click();
+  }
+
+  async function deleteReceipt() {
+    if (!window.confirm('Remove this receipt?')) return;
+    await supabase.storage.from('payment-receipts').remove([receiptPath]);
+    await supabase.from('invoices').update({ receipt_path: null, receipt_name: null }).eq('id', inv.id);
+    setReceiptPath(null);
+    setReceiptName(null);
     onUpdated();
   }
 
@@ -1657,10 +1737,149 @@ function InvoiceTab({ campaign, onUpdated }) {
         </>
       )}
 
-      <div className="flex items-center gap-12">
+      <div className="flex items-center gap-12" style={{ marginBottom: 20 }}>
         <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
         {saved && <span style={{ fontSize: 12, color: 'var(--green)' }}>Saved ✓</span>}
       </div>
+
+      {/* Receipt upload */}
+      <div className="divider" style={{ marginBottom: 16 }} />
+      <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)', marginBottom: 10 }}>Payment Receipt</div>
+      {receiptPath ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+          <span style={{ fontSize: 18 }}>📋</span>
+          <span style={{ fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{receiptName || 'Receipt'}</span>
+          <button className="btn btn-ghost btn-sm" onClick={viewReceipt}>View</button>
+          <button className="btn btn-ghost btn-sm" onClick={downloadReceipt}>↓</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red, #e74c3c)' }} onClick={deleteReceipt}>✕</button>
+        </div>
+      ) : (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 6, cursor: 'pointer' }}>
+          <span style={{ fontSize: 18 }}>📎</span>
+          <span className="text-muted text-sm">{uploading ? 'Uploading...' : 'Click to upload receipt (PDF, JPG, PNG)'}</span>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} disabled={uploading}
+            onChange={e => { if (e.target.files[0]) uploadReceipt(e.target.files[0]); }} />
+        </label>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Files Tab — campaign documents (briefs, emails, media, etc.)
+// ============================================================
+function FilesTab({ campaign }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => { fetchFiles(); }, [campaign.id]);
+
+  async function fetchFiles() {
+    const { data } = await supabase
+      .from('campaign_files')
+      .select('*')
+      .eq('campaign_id', campaign.id)
+      .order('created_at', { ascending: false });
+    setFiles(data || []);
+    setLoading(false);
+  }
+
+  async function uploadFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    setUploading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    for (const file of Array.from(fileList)) {
+      const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
+      const safeName = `${Date.now()}_${Math.random().toString(36).slice(2)}${ext ? '.' + ext : ''}`;
+      const path = `${campaign.id}/${safeName}`;
+      const { error } = await supabase.storage.from('campaign-files').upload(path, file);
+      if (!error) {
+        await supabase.from('campaign_files').insert({
+          campaign_id: campaign.id,
+          uploaded_by: user?.id || null,
+          file_name: file.name,
+          file_path: path,
+          file_size: file.size,
+          file_type: file.type || null,
+        });
+      }
+    }
+    setUploading(false);
+    fetchFiles();
+  }
+
+  async function viewFile(f) {
+    const url = await getDownloadUrl('campaign-files', f.file_path);
+    if (url) window.open(url, '_blank');
+  }
+
+  async function downloadFile(f) {
+    const url = await getDownloadUrl('campaign-files', f.file_path);
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url; a.download = f.file_name;
+    a.click();
+  }
+
+  async function deleteFile(f) {
+    if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return;
+    await supabase.storage.from('campaign-files').remove([f.file_path]);
+    await supabase.from('campaign_files').delete().eq('id', f.id);
+    fetchFiles();
+  }
+
+  // Drag and drop
+  const [dragging, setDragging] = useState(false);
+
+  return (
+    <div>
+      {/* Drop zone */}
+      <label
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '24px 16px', marginBottom: 16,
+          background: dragging ? 'rgba(255,92,0,0.06)' : 'var(--surface)',
+          border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
+          borderRadius: 8, cursor: 'pointer', transition: 'all 0.15s',
+        }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); uploadFiles(e.dataTransfer.files); }}
+      >
+        <span style={{ fontSize: 28, marginBottom: 6 }}>📁</span>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+          {uploading ? 'Uploading...' : 'Drop files here or click to upload'}
+        </span>
+        <span className="text-muted text-xs" style={{ marginTop: 4 }}>
+          Word, PDF, email, images, video, audio — any file type
+        </span>
+        <input type="file" multiple style={{ display: 'none' }} disabled={uploading}
+          onChange={e => uploadFiles(e.target.files)} />
+      </label>
+
+      {loading && <div className="text-muted text-sm">Loading files...</div>}
+
+      {!loading && files.length === 0 && (
+        <div className="empty-state" style={{ padding: '20px 0' }}>
+          <div className="empty-state-icon">📂</div>
+          <div className="empty-state-title">No files yet</div>
+          <div className="empty-state-text">Upload briefs, emails, contracts, or any campaign documents</div>
+        </div>
+      )}
+
+      {files.map(f => (
+        <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, marginBottom: 6 }}>
+          <span style={{ fontSize: 20, flexShrink: 0 }}>{fileIcon(f.file_type)}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file_name}</div>
+            <div className="text-muted text-xs">{fmtBytes(f.file_size)}{f.file_type ? ` · ${f.file_type.split('/')[1]?.toUpperCase() || f.file_type}` : ''}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }} onClick={() => viewFile(f)}>View</button>
+          <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }} onClick={() => downloadFile(f)}>↓</button>
+          <button className="btn btn-ghost btn-sm" style={{ flexShrink: 0, color: 'var(--red, #e74c3c)' }} onClick={() => deleteFile(f)}>✕</button>
+        </div>
+      ))}
     </div>
   );
 }
