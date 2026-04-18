@@ -25,6 +25,9 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
   const [selected, setSelected] = useState(null);
   const [tab, setTab] = useState('deliverables');
   const [filter, setFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
 
   useEffect(() => { fetch(); }, []);
 
@@ -53,10 +56,10 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
       .eq('creator_profile_id', profile.id)
       .order('created_at', { ascending: false });
 
-    const campaigns = data || [];
+    const freshCampaigns = data || [];
 
     // Fetch TikTok stats for all deliverables and merge by id
-    const allDeliverableIds = campaigns.flatMap(c => (c.campaign_deliverables || []).map(d => d.id));
+    const allDeliverableIds = freshCampaigns.flatMap(c => (c.campaign_deliverables || []).map(d => d.id));
     let statsById = {};
     if (allDeliverableIds.length > 0) {
       const { data: statsRows } = await supabase
@@ -67,13 +70,15 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
     }
 
     // Merge stats into deliverables
-    campaigns.forEach(c => {
+    freshCampaigns.forEach(c => {
       (c.campaign_deliverables || []).forEach(d => {
         if (statsById[d.id]) Object.assign(d, statsById[d.id]);
       });
     });
 
-    setCampaigns(campaigns);
+    setCampaigns(freshCampaigns);
+    // Keep detail panel in sync with fresh data
+    setSelected(prev => prev ? (freshCampaigns.find(c => c.id === prev.id) || prev) : null);
     setLoading(false);
   }
 
@@ -81,7 +86,62 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
 
   const STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
-  const filtered = filter === 'all' ? campaigns : campaigns.filter(c => c.status === filter);
+
+  const months = [...new Set(campaigns.map(c => {
+    const d = c.campaign_start_date || c.created_at;
+    return d ? d.slice(0, 7) : null;
+  }).filter(Boolean))].sort().reverse();
+
+  function toggleSort(col) {
+    if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(col); setSortDir('asc'); }
+  }
+
+  function SortTh({ col, children }) {
+    const active = sortBy === col;
+    return (
+      <th style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }} onClick={() => toggleSort(col)}>
+        {children}
+        <span style={{ marginLeft: 4, opacity: active ? 1 : 0.3, fontSize: 9 }}>{active && sortDir === 'desc' ? '▼' : '▲'}</span>
+      </th>
+    );
+  }
+
+  const filtered = campaigns
+    .filter(c => filter === 'all' || c.status === filter)
+    .filter(c => {
+      if (monthFilter === 'all') return true;
+      const d = c.campaign_start_date || c.created_at || '';
+      return d.startsWith(monthFilter);
+    })
+    .sort((a, b) => {
+      let av, bv;
+      switch (sortBy) {
+        case 'campaign':  av = a.campaign_name || ''; bv = b.campaign_name || ''; break;
+        case 'agency':    av = (a.agency?.name || '').toLowerCase(); bv = (b.agency?.name || '').toLowerCase(); break;
+        case 'rate':      av = a.contracted_rate || 0; bv = b.contracted_rate || 0; break;
+        case 'posts': {
+          av = (a.campaign_deliverables || []).filter(d => d.draft_status === 'Posted').length;
+          bv = (b.campaign_deliverables || []).filter(d => d.draft_status === 'Posted').length;
+          break;
+        }
+        case 'deadline': {
+          av = (a.campaign_deliverables || []).filter(d => d.contracted_post_date && d.draft_status !== 'Posted').sort((x,y) => x.contracted_post_date > y.contracted_post_date ? 1 : -1)[0]?.contracted_post_date || '';
+          bv = (b.campaign_deliverables || []).filter(d => d.contracted_post_date && d.draft_status !== 'Posted').sort((x,y) => x.contracted_post_date > y.contracted_post_date ? 1 : -1)[0]?.contracted_post_date || '';
+          break;
+        }
+        case 'status':    av = a.status || ''; bv = b.status || ''; break;
+        case 'payment': {
+          av = a.creator_payouts?.[0]?.payout_status || a.invoices?.[0]?.payment_status || '';
+          bv = b.creator_payouts?.[0]?.payout_status || b.invoices?.[0]?.payment_status || '';
+          break;
+        }
+        default: av = a.created_at || ''; bv = b.created_at || '';
+      }
+      if (av < bv) return sortDir === 'asc' ? -1 : 1;
+      if (av > bv) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
 
   function openCampaign(c) {
     setSelected(c);
@@ -105,6 +165,12 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
             {s === 'all' ? 'All' : s}
           </button>
         ))}
+        {months.length > 0 && (
+          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+            <option value="all">All months</option>
+            {months.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+          </select>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -118,14 +184,14 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
           <table>
             <thead>
               <tr>
-                <th>Campaign</th>
-                <th>Agency</th>
+                <SortTh col="campaign">Campaign</SortTh>
+                <SortTh col="agency">Agency</SortTh>
                 <th>Platforms</th>
-                <th>Rate</th>
-                <th>Posts</th>
-                <th>Next Deadline</th>
-                <th>Status</th>
-                <th>Payment</th>
+                <SortTh col="rate">Rate</SortTh>
+                <SortTh col="posts">Posts</SortTh>
+                <SortTh col="deadline">Next Deadline</SortTh>
+                <SortTh col="status">Status</SortTh>
+                <SortTh col="payment">Payment</SortTh>
               </tr>
             </thead>
             <tbody>
@@ -224,6 +290,16 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
   const payout = c.creator_payouts?.[0];
   const inKind = isInKind(inv?.payment_method);
 
+  const deliverables = c.campaign_deliverables || [];
+  const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
+  const canMarkComplete = allPosted && c.status === 'Active';
+
+  async function markComplete() {
+    if (!window.confirm('Mark this campaign as Completed?')) return;
+    await supabase.from('campaigns').update({ status: 'Completed' }).eq('id', c.id);
+    onUpdated();
+  }
+
   return (
     <div className="detail-panel">
       <div className="detail-header">
@@ -238,6 +314,11 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
             {fmtMoney(c.contracted_rate)}
             {c.is_rush && c.rush_premium > 0 && <span className="text-muted" style={{ fontWeight: 400 }}> + {fmtMoney(c.rush_premium)} rush</span>}
           </div>
+        )}
+        {canMarkComplete && (
+          <button className="btn btn-primary btn-sm mt-8" style={{ marginTop: 10 }} onClick={markComplete}>
+            ✓ Mark Campaign Complete
+          </button>
         )}
       </div>
 
