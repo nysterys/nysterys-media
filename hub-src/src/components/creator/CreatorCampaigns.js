@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
-import { fmtDate } from '../../utils/format';
+import { fmtDate, fmtMoney } from '../../utils/format';
 
 function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
@@ -118,9 +118,10 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
             <thead>
               <tr>
                 <th>Campaign</th>
-                <th>Brand</th>
                 <th>Agency</th>
                 <th>Platforms</th>
+                <th>Rate</th>
+                <th>Posts</th>
                 <th>Next Deadline</th>
                 <th>Status</th>
                 <th>Payment</th>
@@ -128,42 +129,65 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
             </thead>
             <tbody>
               {filtered.map(c => {
-                const nextDeadline = c.campaign_deliverables
-                  ?.filter(d => d.contracted_post_date && d.draft_status !== 'Posted')
-                  ?.sort((a, b) => a.contracted_post_date > b.contracted_post_date ? 1 : -1)?.[0];
+                const deliverables = c.campaign_deliverables || [];
+                const posted = deliverables.filter(d => d.draft_status === 'Posted').length;
+                const total = deliverables.length;
+                const nextDeadline = deliverables
+                  .filter(d => d.contracted_post_date && d.draft_status !== 'Posted')
+                  .sort((a, b) => a.contracted_post_date > b.contracted_post_date ? 1 : -1)[0];
+                const inv = c.invoices?.[0];
+                const payout = c.creator_payouts?.[0];
+                const platformCounts = {};
+                deliverables.forEach(d => {
+                  const name = d.platform?.name || '?';
+                  platformCounts[name] = (platformCounts[name] || 0) + 1;
+                });
                 return (
                   <tr key={c.id} onClick={() => openCampaign(c)}>
-                    <td style={{ fontWeight: 500 }}>{c.campaign_name}</td>
-                    <td>{c.brand_name}</td>
+                    <td>
+                      <div style={{ fontWeight: 500 }}>{c.campaign_name}</div>
+                      <div className="text-muted text-xs">{c.brand_name}</div>
+                    </td>
                     <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
                     <td>
                       <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
-                        {c.campaign_deliverables?.map(d => (
-                          <span key={d.id} className="badge badge-confirmed">{d.platform?.name || '?'}</span>
-                        ))}
-                        {(!c.campaign_deliverables || c.campaign_deliverables.length === 0) && <span className="text-muted">—</span>}
+                        {Object.entries(platformCounts).length === 0
+                          ? <span className="text-muted">—</span>
+                          : Object.entries(platformCounts).map(([name, count]) => (
+                              <span key={name} className="badge badge-confirmed">
+                                {name}{count > 1 ? ` ×${count}` : ''}
+                              </span>
+                            ))}
                       </div>
+                    </td>
+                    <td>
+                      {isInKind(inv?.payment_method)
+                        ? <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>In Kind</span>
+                        : c.contracted_rate
+                          ? <span style={{ color: 'var(--accent)', fontWeight: 500 }}>{fmtMoney(c.contracted_rate)}</span>
+                          : <span className="text-muted">TBD</span>}
+                    </td>
+                    <td>
+                      {total > 0 ? (
+                        <div className="flex items-center gap-8">
+                          <span style={{ fontSize: 12 }}>{posted}/{total}</span>
+                          <div style={{ width: 40, height: 3, background: 'var(--surface3)', borderRadius: 2 }}>
+                            <div style={{ width: `${(posted / total) * 100}%`, height: '100%', background: posted === total ? 'var(--green)' : 'var(--orange)', borderRadius: 2 }} />
+                          </div>
+                        </div>
+                      ) : <span className="text-muted">—</span>}
                     </td>
                     <td>
                       {nextDeadline
                         ? <span style={{ fontWeight: 500 }}>{fmtDate(nextDeadline.contracted_post_date)}</span>
-                        : <span className="text-muted">—</span>
-                      }
+                        : <span className="text-muted">—</span>}
                     </td>
                     <td><Badge status={c.status} /></td>
                     <td>
                       {(() => {
-                        const inv = c.invoices?.[0];
-                        const payout = c.creator_payouts?.[0];
-                        if (isInKind(inv?.payment_method)) {
-                          return <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>In Kind</span>;
-                        }
-                        if (payout?.payout_status) {
-                          return <Badge status={payout.payout_status} />;
-                        }
-                        if (inv?.payment_status) {
-                          return <Badge status={inv.payment_status} />;
-                        }
+                        if (isInKind(inv?.payment_method)) return <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>In Kind</span>;
+                        if (payout?.payout_status) return <Badge status={payout.payout_status} />;
+                        if (inv?.payment_status) return <Badge status={inv.payment_status} />;
                         return <span className="text-muted text-xs">—</span>;
                       })()}
                     </td>
