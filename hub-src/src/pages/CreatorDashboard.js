@@ -19,21 +19,34 @@ const NAV = [
 
 export default function CreatorDashboard() {
   const [activeView, setActiveView] = useState('overview');
+  const [pendingCampaignId, setPendingCampaignId] = useState(null);
 
-  function renderView() {
-    switch (activeView) {
-      case 'overview': return <CreatorOverview setActiveView={setActiveView} />;
-      case 'campaigns': return <CreatorCampaigns />;
-      case 'payments': return <CreatorPayments />;
-      case 'analytics': return <CreatorAnalytics />;
-      default: return <CreatorOverview setActiveView={setActiveView} />;
-    }
+  function navigateToCampaign(campaignId) {
+    setPendingCampaignId(campaignId);
+    setActiveView('campaigns');
   }
+
+  const show = (view) => ({ display: activeView === view ? 'block' : 'none' });
 
   return (
     <div className="app-layout">
       <Sidebar navItems={NAV} activeView={activeView} setActiveView={setActiveView} />
-      <div className="main-content">{renderView()}</div>
+      <div className="main-content">
+        <div style={show('overview')}>
+          <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} />
+        </div>
+        <div style={show('campaigns')}>
+          <CreatorCampaigns
+            pendingCampaignId={pendingCampaignId}
+          />
+        </div>
+        <div style={show('payments')}>
+          <CreatorPayments />
+        </div>
+        <div style={show('analytics')}>
+          <CreatorAnalytics />
+        </div>
+      </div>
     </div>
   );
 }

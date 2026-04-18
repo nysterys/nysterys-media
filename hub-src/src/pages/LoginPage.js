@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { supabase, setHandlingPasswordReset } from '../lib/supabase';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 15 * 60 * 1000;
@@ -24,25 +24,29 @@ export default function LoginPage() {
     const hash = window.location.hash;
     if (!hash) return;
 
-    const params = new URLSearchParams(hash.substring(1));
+    const params      = new URLSearchParams(hash.substring(1));
     const type         = params.get('type');
     const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
 
     if (type === 'recovery' && accessToken && refreshToken) {
-      // Clear tokens from URL immediately — they are one-time use
+      // Tell useAuth to ignore SIGNED_IN events while we handle this
+      setHandlingPasswordReset(true);
+
+      // Clear tokens from URL — one-time use
       window.history.replaceState(null, '', window.location.pathname);
 
-      // Supabase with PKCE doesn't auto-exchange hash tokens —
-      // we must call setSession manually with the tokens from the hash
       supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
       }).then(({ error: sessionError }) => {
         if (sessionError) {
+          setHandlingPasswordReset(false);
           setError('Reset link is invalid or expired. Request a new one.');
           setMode('reset');
         } else {
+          // Session established — show set-password form
+          // Keep isHandlingPasswordReset = true until user sets password
           setMode('set-password');
         }
       });
@@ -107,6 +111,8 @@ export default function LoginPage() {
     if (updateError) {
       setError(updateError.message);
     } else {
+      // Password set — clear the flag and sign out so user logs in fresh
+      setHandlingPasswordReset(false);
       await supabase.auth.signOut();
       setSuccess('Password set. Sign in with your new password.');
       setMode('login');

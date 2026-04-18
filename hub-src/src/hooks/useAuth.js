@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { supabase, isHandlingPasswordReset } from '../lib/supabase';
 
 const AuthContext = createContext({});
 
@@ -7,8 +7,6 @@ export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Track when we're in password-reset mode so we don't redirect to the app
-  const inPasswordReset = useRef(false);
 
   const fetchProfile = useCallback(async (userId) => {
     const { data, error } = await supabase
@@ -31,16 +29,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    // Check if we landed via a recovery link — if so, don't auto-load the app
-    const hash = window.location.hash;
-    if (hash && hash.includes('type=recovery')) {
-      inPasswordReset.current = true;
-      setLoading(false);
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
-      if (inPasswordReset.current) return; // wait for user to set password
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
       else setLoading(false);
@@ -50,24 +40,15 @@ export function AuthProvider({ children }) {
       async (event, session) => {
         if (!mounted) return;
 
+        // If LoginPage is handling a recovery token, ignore auth events
+        // until the user has set their new password and signed out
+        if (isHandlingPasswordReset) {
+          setLoading(false);
+          return;
+        }
+
         if (event === 'PASSWORD_RECOVERY') {
-          inPasswordReset.current = true;
           setLoading(false);
-          return;
-        }
-
-        // After password is updated and we sign out, clear the reset flag
-        if (event === 'SIGNED_OUT') {
-          inPasswordReset.current = false;
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-
-        // If we're mid-reset and get a SIGNED_IN (from setSession),
-        // don't load the app — LoginPage is handling it
-        if (inPasswordReset.current && event === 'SIGNED_IN') {
           return;
         }
 
