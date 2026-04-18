@@ -1,51 +1,23 @@
-# Nysterys Media
+# Nysterys Media — Install Package
 
-This repository is the complete source for `nysterys.com` and the internal Creator Hub portal at `nysterys.com/hub/`.
+Complete source for a fresh rebuild of nysterys.com and the Creator Hub at nysterys.com/hub/.
 
-GitHub Pages serves directly from the repo root, so the public site files (`index.html`, `global.css`, etc.) live at the root. The Creator Hub built output lives in `/hub/`. Source code and documentation are in subdirectories that GitHub Pages ignores.
+## Start here
 
-## Repository structure
+1. Read `docs/FRESH-INSTALL.md` for step-by-step setup
+2. Read `docs/MASTER-REFERENCE.md` for full system documentation and Claude context
 
-```
-/                     → nysterys.com/ (public site, served by GitHub Pages)
-├── index.html
-├── global.css
-├── creator.html
-├── media-kit.html
-├── rate-card.html
-├── privacy.html
-├── data.json
-├── utils.js
-├── icons.js
-├── kym.jpg           ← add your image files here
-├── mys.jpg
-├── robots.txt
-├── sitemap.xml
-├── CNAME
+## Package contents
 
-/hub/                 → nysterys.com/hub/ (Creator Hub, built output)
-├── index.html
-└── static/
+| Directory | Contents |
+|---|---|
+| `hub-src/` | React source for the Creator Hub |
+| `schemas/` | Supabase SQL schema (single consolidated file) |
+| `public-site/` | Static public site files (copy to repo root) |
+| `docs/` | Master reference and install guide |
 
-/hub-src/             → Creator Hub React source (not served)
-├── src/
-├── public/
-├── package.json
-└── .env.example
+## For a new Claude session
 
-/schemas/             → Supabase SQL files
-├── SCHEMA.sql        ← USE THIS for fresh DB setup (consolidated, single file)
-└── 01-15-*.sql       ← Historical migration steps (reference only, do not re-run)
+Paste into the first message:
 
-/docs/                → Setup and reference documentation
-├── 01-setup.md       ← START HERE
-├── 02-supabase.md
-├── 03-coupler.md
-├── 04-deployment.md
-└── 05-security.md
-```
-
-## Quick start
-
-For a fresh Claude session or full rebuild, start with [docs/00-master-reference.md](docs/00-master-reference.md).
-For initial setup, see [docs/01-setup.md](docs/01-setup.md).
+> This is the Nysterys Media Creator Hub — a React/Supabase influencer management portal for Patrick Nijsters managing creators Kym and Mys. The repo is at ~/Downloads/nysterys-media/. Hub source in hub-src/, built output in hub/, schema in schemas/SCHEMA.sql. Supabase URL: https://rnntuxabccnphfvvvaks.supabase.co. Read docs/MASTER-REFERENCE.md before starting work. [Describe the specific change you want.]
