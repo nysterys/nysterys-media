@@ -26,7 +26,6 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
     if (target) {
       setSelected(target);
       setTab('deliverables');
-      if (onCampaignOpened) onCampaignOpened();
     }
   }, [pendingCampaignId, campaigns]);
 

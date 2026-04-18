@@ -26,7 +26,7 @@ export default function CreatorDashboard() {
     setActiveView('campaigns');
   }
 
-  const show = (view) => ({ display: activeView === view ? 'contents' : 'none' });
+  const show = (view) => ({ display: activeView === view ? 'block' : 'none' });
 
   return (
     <div className="app-layout">
@@ -38,7 +38,6 @@ export default function CreatorDashboard() {
         <div style={show('campaigns')}>
           <CreatorCampaigns
             pendingCampaignId={pendingCampaignId}
-            onCampaignOpened={() => setPendingCampaignId(null)}
           />
         </div>
         <div style={show('payments')}>
