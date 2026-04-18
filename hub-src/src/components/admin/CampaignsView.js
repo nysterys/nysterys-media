@@ -518,6 +518,9 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
       rush_premium: form.rush_premium ? parseFloat(form.rush_premium) : 0,
       agency_id: form.agency_id || null,
       creator_profile_id: form.creator_profile_id || null,
+      deal_signed_date: form.deal_signed_date || null,
+      campaign_start_date: form.campaign_start_date || null,
+      campaign_end_date: form.campaign_end_date || null,
     }).select().single();
 
     if (campErr) { setError(campErr.message); setSaving(false); return; }
