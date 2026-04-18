@@ -5,8 +5,12 @@ import Badge from '../shared/Badge';
 import { fmtDate, fmtMoney, fmtMonth, extractMonths } from '../../utils/format';
 
 function PayoutBadge({ status }) {
-  const map = { 'Pending': 'badge-not-invoiced', 'Partial': 'badge-pending', 'Paid': 'badge-paid', 'On Hold': 'badge-overdue' };
+  const map = { 'Pending': 'badge-not-invoiced', 'Partial': 'badge-pending', 'Paid': 'badge-paid', 'On Hold': 'badge-overdue', 'N/A': 'badge-not-invoiced' };
   return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status || 'Pending'}</span>;
+}
+
+function isInKind(paymentMethod) {
+  return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
 function SplitStatusBadge({ status }) {
@@ -45,8 +49,8 @@ export default function CreatorPayments() {
   // Monthly summary for selected month or all time
   const monthRows = monthFilter !== 'all' ? rows.filter(r => r.invoice_date?.startsWith(monthFilter)) : rows;
   const monthContracted = monthRows.reduce((s, r) => s + (r.contracted_rate || 0), 0);
-  const monthPaidOut = monthRows.filter(r => r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
-  const monthPending = monthRows.filter(r => r.payout_status !== 'Paid').reduce((s, r) => s + (r.contracted_rate || 0), 0);
+  const monthPaidOut = monthRows.filter(r => r.payout_status === 'Paid' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.payout_amount || 0), 0);
+  const monthPending = monthRows.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.contracted_rate || 0), 0);
   const monthCleared = monthRows.reduce((s, r) => s + (r.splits_cleared > 0 ? 1 : 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -86,7 +90,7 @@ export default function CreatorPayments() {
 
       {/* Payout filter */}
       <div className="filters-row">
-        {['all', 'Pending', 'Partial', 'Paid', 'On Hold'].map(s => (
+        {['all', 'Pending', 'Partial', 'Paid', 'On Hold', 'N/A'].map(s => (
           <button key={s} className={`filter-chip ${payoutFilter === s ? 'active' : ''}`} onClick={() => setPayoutFilter(s)}>
             {s === 'all' ? 'All' : s}
           </button>
@@ -125,17 +129,21 @@ export default function CreatorPayments() {
                     <Badge status={r.agency_payment_status || 'Not Invoiced'} />
                   </td>
                   <td>
-                    {r.payout_amount != null
-                      ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(r.payout_amount)}</span>
-                      : <span className="text-muted">—</span>}
+                    {isInKind(r.payment_method)
+                      ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>{fmtMoney(r.invoice_amount || r.contracted_rate)} (in kind)</span>
+                      : r.payout_amount != null
+                        ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(r.payout_amount)}</span>
+                        : <span className="text-muted">—</span>}
                   </td>
-                  <td><PayoutBadge status={r.payout_status} /></td>
+                  <td><PayoutBadge status={isInKind(r.payment_method) ? 'N/A' : (r.payout_status || 'Pending')} /></td>
                   <td>
-                    {r.split_count > 0
-                      ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>
-                          {r.splits_cleared}/{r.split_count} cleared
-                        </span>
-                      : <span className="text-muted text-xs">—</span>}
+                    {isInKind(r.payment_method)
+                      ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>N/A</span>
+                      : r.split_count > 0
+                        ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>
+                            {r.splits_cleared}/{r.split_count} cleared
+                          </span>
+                        : <span className="text-muted text-xs">—</span>}
                   </td>
                   <td>{fmtDate(r.payout_date)}</td>
                 </tr>
@@ -175,7 +183,7 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
         .select('*, payout_splits(*, destination:payment_destinations(name, account_type, account_last4, institution))')
         .eq('campaign_id', row.campaign_id)
         .maybeSingle(),
-      supabase.from('invoices').select('payment_status, invoice_date, invoice_amount, amount_received, processing_fee, you_received, you_received_date').eq('campaign_id', row.campaign_id).maybeSingle(),
+      supabase.from('invoices').select('payment_status, invoice_date, invoice_amount, amount_received, processing_fee, you_received, you_received_date, payment_method').eq('campaign_id', row.campaign_id).maybeSingle(),
     ]);
     setPayout(payoutRes.data || null);
     setSplits(payoutRes.data?.payout_splits || []);
@@ -210,10 +218,18 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                   <div className="detail-item-value"><Badge status={invoice?.payment_status || 'Not Invoiced'} /></div>
                 </div>
                 <div>
-                  <div className="detail-item-label">Invoice Amount</div>
+                  <div className="detail-item-label">
+                    {isInKind(invoice?.payment_method) ? 'Fair Value (In Kind)' : 'Invoice Amount'}
+                  </div>
                   <div className="detail-item-value" style={{ fontWeight: 600 }}>{fmtMoney(invoice?.invoice_amount)}</div>
                 </div>
-                {invoice?.you_received && (
+                {isInKind(invoice?.payment_method) ? (
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.6 }}>
+                      In-kind compensation. Fair value tracked for tax purposes. No cash received.
+                    </div>
+                  </div>
+                ) : invoice?.you_received ? (
                   <>
                     <div>
                       <div className="detail-item-label">Received by Manager</div>
@@ -230,14 +246,23 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                       </div>
                     )}
                   </>
-                )}
+                ) : null}
               </div>
             </div>
 
             {/* Payout */}
             <div className="detail-section">
               <div className="detail-section-title">YOUR PAYOUT</div>
-              {!payout ? (
+              {isInKind(invoice?.payment_method) ? (
+                <div style={{
+                  padding: '12px 14px', borderRadius: 6, fontSize: 12,
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+                  color: 'var(--text-muted)', lineHeight: 1.7,
+                }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>In-Kind Campaign</div>
+                  This campaign was compensated in kind. No cash payout applies.
+                </div>
+              ) : !payout ? (
                 <div className="text-muted text-sm">Payout not yet created by your manager.</div>
               ) : (
                 <>
