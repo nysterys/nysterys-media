@@ -99,8 +99,11 @@ export default function AnalyticsView() {
   }
 
   const profile = data?.profile || [];
-  const latestProfile = profile[profile.length - 1];
-  const earliestProfile = profile[0];
+  // Filter out days where followers_count is zero or null — TikTok API occasionally
+  // returns 0 for the most recent day before the data is finalized
+  const profileClean = profile.filter(d => Number(d.followers_count) > 0);
+  const latestProfile = profileClean[profileClean.length - 1];
+  const earliestProfile = profileClean[0];
 
   const followerGrowth = latestProfile && earliestProfile
     ? latestProfile.followers_count - earliestProfile.followers_count
@@ -200,7 +203,7 @@ export default function AnalyticsView() {
 
       {loading ? (
         <div className="text-muted">Loading analytics...</div>
-      ) : profile.length === 0 ? (
+      ) : profileClean.length === 0 ? (
         <NoDataState username={selectedAccount?.tiktok_username} />
       ) : (
         <>
@@ -221,15 +224,15 @@ export default function AnalyticsView() {
           {/* Follower growth chart */}
           <ChartCard title={`FOLLOWER GROWTH — LAST ${dateRange} DAYS`}>
             <SparkLine
-              data={profile.map(d => Number(d.net_followers) || 0)}
-              xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
+              data={profileClean.map(d => Number(d.net_followers) || 0)}
+              xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
               color="var(--orange)"
               height={120}
               fill={true}
               valueFormatter={v => fmtNum(v)}
             />
             <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
+              <span>{profileClean[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
               <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
             </div>
           </ChartCard>
@@ -238,27 +241,27 @@ export default function AnalyticsView() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
             <ChartCard title="DAILY VIDEO VIEWS">
               <SparkLine
-                data={profile.map(d => Number(d.video_views) || 0)}
-                xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
+                data={profileClean.map(d => Number(d.video_views) || 0)}
+                xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
                 color="var(--blue)"
                 height={70}
                 valueFormatter={v => fmtNum(v)}
               />
               <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
+                <span>{profileClean[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
                 <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
               </div>
             </ChartCard>
             <ChartCard title="DAILY LIKES">
               <SparkLine
-                data={profile.map(d => Number(d.likes) || 0)}
-                xLabels={profile.map(d => format(parseISO(d.date), 'MMM d'))}
+                data={profileClean.map(d => Number(d.likes) || 0)}
+                xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
                 color="var(--purple)"
                 height={70}
                 valueFormatter={v => fmtNum(v)}
               />
               <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                <span>{profile[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
+                <span>{profileClean[0] && format(parseISO(profile[0].date), 'MMM d')}</span>
                 <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
               </div>
             </ChartCard>
