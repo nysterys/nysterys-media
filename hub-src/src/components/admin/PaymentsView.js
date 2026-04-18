@@ -111,7 +111,7 @@ export default function PaymentsView() {
         {months.length > 0 && (
           <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
             <option value="all">All months</option>
-            {months.map(m => <option key={m} value={m}>{format(new Date(m + '-01'), 'MMMM yyyy')}</option>)}
+            {months.map(m => <option key={m} value={m}>{format(parseISO(m + '-01'), 'MMMM yyyy')}</option>)}
           </select>
         )}
       </div>
