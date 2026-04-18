@@ -21,7 +21,7 @@ export default function Sidebar({ navItems, activeView, setActiveView }) {
 
       <nav className="sidebar-nav">
         {navItems.map((section, si) => (
-          <div key={si}>
+          <div key={si} style={{ display: 'contents' }}>
             {section.label && (
               <div className="nav-section-label">{section.label}</div>
             )}
@@ -37,6 +37,11 @@ export default function Sidebar({ navItems, activeView, setActiveView }) {
             ))}
           </div>
         ))}
+        {/* Sign out — only visible in mobile bottom nav */}
+        <div className="nav-item nav-item-signout" onClick={signOut}>
+          <span className="nav-item-icon">⎋</span>
+          Sign Out
+        </div>
       </nav>
 
       <div className="sidebar-footer">
