@@ -270,7 +270,14 @@ export default function AnalyticsView() {
             {/* Gender */}
             <ChartCard title="AUDIENCE GENDER">
               {genderAvg.length === 0 ? (
-                <div className="text-muted text-sm">No data yet</div>
+                <div>
+                  <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
+                  {profile.length > 0 && (
+                    <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
+                      ⚠ Profile data exists but gender data is missing — Coupler.io's Replace sync may have wiped RLS policies. Re-run <strong>13-reapply-tiktok-rls.sql</strong> in Supabase SQL Editor.
+                    </div>
+                  )}
+                </div>
               ) : (
                 <DonutChart segments={genderAvg} size={160} />
               )}
@@ -279,7 +286,14 @@ export default function AnalyticsView() {
             {/* Top countries */}
             <ChartCard title="TOP COUNTRIES">
               {topCountries.length === 0 ? (
-                <div className="text-muted text-sm">No data yet</div>
+                <div>
+                  <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
+                  {profile.length > 0 && (
+                    <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
+                      ⚠ Re-run <strong>13-reapply-tiktok-rls.sql</strong> in Supabase SQL Editor to restore access after Coupler sync.
+                    </div>
+                  )}
+                </div>
               ) : (
                 topCountries.slice(0, 5).map(c => (
                   <HBar
