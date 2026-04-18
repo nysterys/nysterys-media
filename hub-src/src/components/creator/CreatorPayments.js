@@ -174,7 +174,10 @@ export default function CreatorPayments() {
                             <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
                             <div className="text-muted" style={{ fontSize: 10 }}>
                               {dest?.account_type === 'Other'
-                                ? s.notes ? s.notes.slice(0, 50) + (s.notes.length > 50 ? '…' : '') : 'Other'
+                                ? (() => {
+                                    const note = s.notes || r.payout_notes;
+                                    return note ? note.slice(0, 50) + (note.length > 50 ? '…' : '') : 'Other';
+                                  })()
                                 : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`}
                             </div>
                           </td>
