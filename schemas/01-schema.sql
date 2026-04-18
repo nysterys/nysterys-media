@@ -126,6 +126,7 @@ create table public.campaign_deliverables (
   
   -- What's required
   deliverable_details text, -- specific instructions for this platform
+  music_url text,           -- optional: link to the music/sound the creator must use
   quantity int default 1, -- number of posts on this platform
   
   -- Contracted posting date

@@ -1098,6 +1098,16 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
             <div className="text-muted text-sm mb-8">{d.deliverable_details}</div>
           )}
 
+          {d.music_url && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 12 }}>
+              <span style={{ fontSize: 14 }}>🎵</span>
+              <span className="text-muted">Music:</span>
+              <span className="link" style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); openPopup(d.music_url); }}>
+                {d.music_url.length > 50 ? d.music_url.slice(0, 50) + '…' : d.music_url}
+              </span>
+            </div>
+          )}
+
           {/* TikTok video preview */}
           {d.cover_image_url && (
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
@@ -1441,6 +1451,7 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
     actual_post_date: deliverable.actual_post_date || '',
     post_url: deliverable.post_url || '',
     draft_status: deliverable.draft_status || 'Not Started',
+    music_url: deliverable.music_url || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -1455,6 +1466,7 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
       actual_post_date: form.actual_post_date || null,
       post_url: form.post_url || null,
       draft_status: form.draft_status,
+      music_url: form.music_url || null,
     };
     if (form.draft_status === 'Posted' && !deliverable.posted_at) {
       update.posted_at = new Date().toISOString();
@@ -1531,6 +1543,24 @@ function EditDeliverableModal({ deliverable, campaign, platforms, deliverableTyp
                 <span className="link" style={{ cursor: "pointer" }} onClick={() => openPopup(form.post_url)}>View post ↗</span>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
                   onClick={() => setForm(f => ({ ...f, post_url: '', actual_post_date: '' }))}>Clear</button>
+              </div>
+            )}
+          </div>
+          <div className="form-group">
+            <label className="form-label">
+              Music / Sound URL <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>optional</span>
+            </label>
+            <input
+              className="form-input"
+              value={form.music_url}
+              onChange={e => setForm(f => ({ ...f, music_url: e.target.value }))}
+              placeholder="https://www.tiktok.com/music/..."
+            />
+            {form.music_url && (
+              <div style={{ marginTop: 6, fontSize: 11, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className="link" style={{ cursor: 'pointer' }} onClick={() => openPopup(form.music_url)}>Open ↗</span>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
+                  onClick={() => setForm(f => ({ ...f, music_url: '' }))}>Clear</button>
               </div>
             )}
           </div>
@@ -1916,7 +1946,7 @@ function QuickPickModal({ title, options, onPick, onClose }) {
 }
 
 function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose, onSaved }) {
-  const [form, setForm] = useState({ platform_id: '', deliverable_type_id: '', deliverable_details: '', quantity: 1, contracted_post_date: '' });
+  const [form, setForm] = useState({ platform_id: '', deliverable_type_id: '', deliverable_details: '', quantity: 1, contracted_post_date: '', music_url: '' });
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1929,6 +1959,7 @@ function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose,
       deliverable_details: form.deliverable_details || null,
       quantity: 1,
       contracted_post_date: form.contracted_post_date || null,
+      music_url: form.music_url || null,
     }));
     await supabase.from('campaign_deliverables').insert(rows);
     setSaving(false);
@@ -1939,7 +1970,7 @@ function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose,
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 460 }}>
         <div className="modal-header">
-          <div className="modal-title" style={{ fontSize: 18 }}>ADD PLATFORM</div>
+          <div className="modal-title" style={{ fontSize: 18 }}>ADD DELIVERABLE</div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
@@ -1972,6 +2003,19 @@ function AddDeliverableModal({ campaignId, platforms, deliverableTypes, onClose,
           <div className="form-group">
             <label className="form-label">Details</label>
             <input className="form-input" value={form.deliverable_details} onChange={e => setForm(f => ({ ...f, deliverable_details: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">
+              Music / Sound URL <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>optional</span>
+            </label>
+            <input className="form-input" value={form.music_url} onChange={e => setForm(f => ({ ...f, music_url: e.target.value }))} placeholder="https://www.tiktok.com/music/..." />
+            {form.music_url && (
+              <div style={{ marginTop: 6, fontSize: 11, display: 'flex', gap: 8 }}>
+                <span className="link" style={{ cursor: 'pointer' }} onClick={() => openPopup(form.music_url)}>Open ↗</span>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '1px 6px', color: 'var(--red, #e74c3c)' }}
+                  onClick={() => setForm(f => ({ ...f, music_url: '' }))}>Clear</button>
+              </div>
+            )}
           </div>
         </div>
         <div className="modal-footer">
