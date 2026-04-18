@@ -4,7 +4,11 @@ import Badge from '../shared/Badge';
 import { fmtDate, fmtMoney, fmtMonth, extractMonths, isValidDateString, isValidNumber, isValidUrl } from '../../utils/format';
 
 const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'];
-const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold'];
+const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold', 'N/A'];
+
+function isInKind(paymentMethod) {
+  return (paymentMethod || '').toLowerCase() === 'in kind';
+}
 const SPLIT_STATUSES = ['Pending', 'Sent', 'Cleared', 'Failed'];
 
 function openPopup(url) {
@@ -58,9 +62,9 @@ export default function PaymentsView() {
   });
 
   const totalContracted = filtered.reduce((s, r) => s + (r.contracted_rate || 0), 0);
-  const totalReceived = filtered.filter(r => r.you_received).reduce((s, r) => s + (r.amount_received || r.invoice_amount || 0), 0);
-  const totalPaidOut = filtered.filter(r => r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
-  const totalPendingPayout = filtered.filter(r => r.payout_status !== 'Paid' && r.you_received).reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
+  const totalReceived = filtered.filter(r => r.you_received && !isInKind(r.payment_method)).reduce((s, r) => s + (r.amount_received || r.invoice_amount || 0), 0);
+  const totalPaidOut = filtered.filter(r => r.payout_status === 'Paid' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.payout_amount || 0), 0);
+  const totalPendingPayout = filtered.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && !isInKind(r.payment_method) && r.you_received).reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
@@ -126,22 +130,34 @@ export default function PaymentsView() {
                 <td style={{ fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
                 <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
                 <td>
-                  {r.you_received
-                    ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: 12 }}>✓ {fmtDate(r.you_received_date)}</span>
-                    : <span className="text-muted text-xs">Not yet</span>}
+                  {isInKind(r.payment_method)
+                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>In Kind</span>
+                    : r.you_received
+                      ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: 12 }}>✓ {fmtDate(r.you_received_date)}</span>
+                      : <span className="text-muted text-xs">Not yet</span>}
                 </td>
                 <td>
-                  {r.amount_received != null
-                    ? <span style={{ color: r.amount_received < (r.invoice_amount || r.contracted_rate) ? 'var(--orange)' : 'var(--text)' }}>{fmtMoney(r.amount_received)}</span>
-                    : <span className="text-muted">—</span>}
+                  {isInKind(r.payment_method)
+                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>{fmtMoney(r.invoice_amount || r.contracted_rate)} (in kind)</span>
+                    : r.amount_received != null
+                      ? <span style={{ color: r.amount_received < (r.invoice_amount || r.contracted_rate) ? 'var(--orange)' : 'var(--text)' }}>{fmtMoney(r.amount_received)}</span>
+                      : <span className="text-muted">—</span>}
                 </td>
                 <td>{r.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontSize: 12 }}>{fmtMoney(r.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
-                <td><PayoutBadge status={r.payout_status} /></td>
-                <td>{r.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(r.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
+                <td><PayoutBadge status={isInKind(r.payment_method) ? 'N/A' : (r.payout_status || 'Pending')} /></td>
                 <td>
-                  {r.split_count > 0
-                    ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>{r.splits_cleared}/{r.split_count} cleared</span>
-                    : <span className="text-muted text-xs">—</span>}
+                  {isInKind(r.payment_method)
+                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>In Kind</span>
+                    : r.payout_amount != null
+                      ? <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(r.payout_amount)}</span>
+                      : <span className="text-muted">—</span>}
+                </td>
+                <td>
+                  {isInKind(r.payment_method)
+                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>N/A</span>
+                    : r.split_count > 0
+                      ? <span className="text-sm" style={{ color: r.splits_cleared === r.split_count ? 'var(--green)' : 'var(--text-muted)' }}>{r.splits_cleared}/{r.split_count} cleared</span>
+                      : <span className="text-muted text-xs">—</span>}
                 </td>
               </tr>
             ))}
@@ -244,14 +260,16 @@ function InvoiceForm({ invoice, row, onUpdated }) {
   const delta = form.amount_received !== '' && form.invoice_amount !== ''
     ? parseFloat(form.amount_received) - parseFloat(form.invoice_amount) : null;
 
+  const inKind = isInKind(form.payment_method);
+
   async function save() {
     const errors = [];
     if (form.invoice_date && !isValidDateString(form.invoice_date)) errors.push('Invoice date is not a valid date.');
     if (form.payment_received_date && !isValidDateString(form.payment_received_date)) errors.push('Agency paid date is not a valid date.');
-    if (form.you_received_date && !isValidDateString(form.you_received_date)) errors.push('Date cleared is not a valid date.');
+    if (!inKind && form.you_received_date && !isValidDateString(form.you_received_date)) errors.push('Date cleared is not a valid date.');
     if (form.invoice_amount !== '' && !isValidNumber(form.invoice_amount)) errors.push('Invoice amount must be a number.');
-    if (form.amount_received !== '' && !isValidNumber(form.amount_received)) errors.push('Amount received must be a number.');
-    if (form.processing_fee !== '' && !isValidNumber(form.processing_fee)) errors.push('Processing fee must be a number.');
+    if (!inKind && form.amount_received !== '' && !isValidNumber(form.amount_received)) errors.push('Amount received must be a number.');
+    if (!inKind && form.processing_fee !== '' && !isValidNumber(form.processing_fee)) errors.push('Processing fee must be a number.');
     if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
     const payload = {
@@ -262,11 +280,11 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       payment_received_date: form.payment_received_date || null,
       payment_method: form.payment_method || null,
       payment_notes: form.payment_notes || null,
-      you_received: form.you_received,
-      you_received_date: form.you_received_date || null,
-      you_received_notes: form.you_received_notes || null,
-      amount_received: form.amount_received !== '' ? parseFloat(form.amount_received) : null,
-      processing_fee: form.processing_fee !== '' ? parseFloat(form.processing_fee) : 0,
+      you_received: inKind ? false : form.you_received,
+      you_received_date: inKind ? null : (form.you_received_date || null),
+      you_received_notes: inKind ? null : (form.you_received_notes || null),
+      amount_received: inKind ? null : (form.amount_received !== '' ? parseFloat(form.amount_received) : null),
+      processing_fee: inKind ? 0 : (form.processing_fee !== '' ? parseFloat(form.processing_fee) : 0),
     };
     if (invoice) {
       await supabase.from('invoices').update(payload).eq('id', invoice.id);
@@ -355,7 +373,15 @@ function InvoiceForm({ invoice, row, onUpdated }) {
         </div>
         <div className="form-group">
           <label className="form-label">Payment Method</label>
-          <input className="form-input" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder="PayPal, Wire, ACH..." />
+          <select className="form-select" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
+            <option value="">Select...</option>
+            <option>PayPal</option>
+            <option>Wire</option>
+            <option>ACH</option>
+            <option>Check</option>
+            <option>Zelle</option>
+            <option>In Kind</option>
+          </select>
         </div>
       </div>
       <div className="form-group">
@@ -364,52 +390,61 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       </div>
 
       <div className="divider" />
-      <div className="detail-section-title">RECEIVED BY YOU</div>
 
-      <div className="form-group">
-        <label className="checkbox-row">
-          <input type="checkbox" checked={form.you_received} onChange={e => setForm(f => ({ ...f, you_received: e.target.checked }))} />
-          Money has cleared my account
-        </label>
-      </div>
-
-      {form.you_received && (
+      {inKind ? (
+        <div style={{ padding: '12px 14px', borderRadius: 6, marginBottom: 4, fontSize: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+          <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>In-Kind Compensation</div>
+          Fair value tracked for tax purposes only. No cash changes hands, so there is nothing to mark as received and no payout to the creator.
+        </div>
+      ) : (
         <>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Date Cleared</label>
-              <input className="form-input" type="date" value={form.you_received_date} onChange={e => setForm(f => ({ ...f, you_received_date: e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Amount Received ($)</label>
-              <input className="form-input" type="number" step="0.01" value={form.amount_received}
-                onChange={e => setForm(f => ({ ...f, amount_received: e.target.value }))}
-                placeholder={form.invoice_amount || ''} />
-            </div>
+          <div className="detail-section-title">RECEIVED BY YOU</div>
+          <div className="form-group">
+            <label className="checkbox-row">
+              <input type="checkbox" checked={form.you_received} onChange={e => setForm(f => ({ ...f, you_received: e.target.checked }))} />
+              Money has cleared my account
+            </label>
           </div>
-          {delta !== null && Math.abs(delta) > 0.01 && (
-            <div style={{
-              padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 12,
-              background: delta < 0 ? 'rgba(255,156,58,0.08)' : 'rgba(74,223,138,0.08)',
-              border: `1px solid ${delta < 0 ? 'rgba(255,156,58,0.25)' : 'rgba(74,223,138,0.25)'}`,
-              color: delta < 0 ? 'var(--orange)' : 'var(--green)',
-            }}>
-              {delta < 0
-                ? `${fmtMoney(Math.abs(delta))} less than invoiced — record processing fee below`
-                : `${fmtMoney(delta)} more than invoiced`}
-            </div>
+
+          {form.you_received && (
+            <>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Date Cleared</label>
+                  <input className="form-input" type="date" value={form.you_received_date} onChange={e => setForm(f => ({ ...f, you_received_date: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Amount Received ($)</label>
+                  <input className="form-input" type="number" step="0.01" value={form.amount_received}
+                    onChange={e => setForm(f => ({ ...f, amount_received: e.target.value }))}
+                    placeholder={form.invoice_amount || ''} />
+                </div>
+              </div>
+              {delta !== null && Math.abs(delta) > 0.01 && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 12,
+                  background: delta < 0 ? 'rgba(255,156,58,0.08)' : 'rgba(74,223,138,0.08)',
+                  border: `1px solid ${delta < 0 ? 'rgba(255,156,58,0.25)' : 'rgba(74,223,138,0.25)'}`,
+                  color: delta < 0 ? 'var(--orange)' : 'var(--green)',
+                }}>
+                  {delta < 0
+                    ? `${fmtMoney(Math.abs(delta))} less than invoiced — record processing fee below`
+                    : `${fmtMoney(delta)} more than invoiced`}
+                </div>
+              )}
+              <div className="form-group">
+                <label className="form-label">Processing Fee ($)</label>
+                <input className="form-input" type="number" step="0.01" value={form.processing_fee}
+                  onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <input className="form-input" value={form.you_received_notes}
+                  onChange={e => setForm(f => ({ ...f, you_received_notes: e.target.value }))}
+                  placeholder="e.g. PayPal deducted $12 fee" />
+              </div>
+            </>
           )}
-          <div className="form-group">
-            <label className="form-label">Processing Fee ($)</label>
-            <input className="form-input" type="number" step="0.01" value={form.processing_fee}
-              onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Notes</label>
-            <input className="form-input" value={form.you_received_notes}
-              onChange={e => setForm(f => ({ ...f, you_received_notes: e.target.value }))}
-              placeholder="e.g. PayPal deducted $12 fee" />
-          </div>
         </>
       )}
 
@@ -483,6 +518,8 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const inKind = isInKind(row.payment_method);
+
   const totalPct = splitForms.reduce((s, f) => s + (parseFloat(f.percentage) || 0), 0);
   const payoutAmt = parseFloat(form.payout_amount) || 0;
 
@@ -544,6 +581,17 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
 
   return (
     <div>
+      {inKind ? (
+        <div style={{
+          padding: '16px 18px', borderRadius: 8, fontSize: 13,
+          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
+          color: 'var(--text-muted)', lineHeight: 1.7,
+        }}>
+          <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>In-Kind Campaign</div>
+          This campaign was compensated in kind. No cash was received and no payout to the creator applies. The fair value is tracked on the Invoice tab for tax purposes only.
+        </div>
+      ) : (
+        <>
       {!row.you_received && (
         <div style={{ padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: 12, background: 'rgba(255,156,58,0.08)', border: '1px solid rgba(255,156,58,0.2)', color: 'var(--orange)' }}>
           Mark payment as received on the Invoice tab before recording payout.
@@ -662,6 +710,8 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
       <button className="btn btn-primary w-full mt-12" onClick={save} disabled={saving} style={{ justifyContent: 'center' }}>
         {saving ? 'Saving...' : 'Save Payout'}
       </button>
+      </>
+      )}
     </div>
   );
 }
