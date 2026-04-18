@@ -4,17 +4,18 @@ import CreatorOverview from '../components/creator/CreatorOverview';
 import CreatorCampaigns from '../components/creator/CreatorCampaigns';
 import CreatorAnalytics from '../components/creator/CreatorAnalytics';
 import CreatorPayments from '../components/creator/CreatorPayments';
-
+import CreatorRewards from '../components/creator/CreatorRewards';
 import CreatorCalendar from '../components/creator/CreatorCalendar';
 
 const NAV = [
   {
     label: null,
     items: [
-      { view: 'overview', icon: '◈', label: 'My Overview' },
+      { view: 'overview',  icon: '◈', label: 'My Overview' },
       { view: 'campaigns', icon: '◎', label: 'My Campaigns' },
-      { view: 'calendar', icon: '▦', label: 'My Calendar' },
-      { view: 'payments', icon: '◇', label: 'My Payments' },
+      { view: 'calendar',  icon: '▦', label: 'My Calendar' },
+      { view: 'payments',  icon: '◇', label: 'My Payments' },
+      { view: 'rewards',   icon: '★', label: 'My Rewards' },
       { view: 'analytics', icon: '◉', label: 'My Analytics' },
     ]
   }
@@ -54,6 +55,9 @@ export default function CreatorDashboard() {
         </div>
         <div style={show('payments')}>
           <CreatorPayments />
+        </div>
+        <div style={show('rewards')}>
+          <CreatorRewards />
         </div>
         <div style={show('analytics')}>
           <CreatorAnalytics />

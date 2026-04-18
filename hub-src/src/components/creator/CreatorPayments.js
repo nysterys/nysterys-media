@@ -22,8 +22,6 @@ export default function CreatorPayments() {
   const { profile } = useAuth();
   const [rows, setRows] = useState([]);
   const [splitsByPayoutId, setSplitsByPayoutId] = useState({});
-  const [rewardEntries, setRewardEntries] = useState([]);
-  const [rewardSplitsByPayoutId, setRewardSplitsByPayoutId] = useState({});
   const [loading, setLoading] = useState(true);
   const [monthFilter, setMonthFilter] = useState('all');
   const [payoutFilter, setPayoutFilter] = useState('all');
@@ -32,15 +30,14 @@ export default function CreatorPayments() {
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const [summaryRes, rewardRes] = await Promise.all([
-      supabase.from('campaign_payout_summary').select('*').eq('creator_profile_id', profile.id).order('invoice_date', { ascending: false, nullsFirst: false }),
-      supabase.from('reward_payout_summary').select('*').eq('profile_id', profile.id).order('period_month', { ascending: false }),
-    ]);
+    const { data: summaryData } = await supabase
+      .from('campaign_payout_summary')
+      .select('*')
+      .eq('creator_profile_id', profile.id)
+      .order('invoice_date', { ascending: false, nullsFirst: false });
 
-    const rows = summaryRes.data || [];
-    const rewardRows = rewardRes.data || [];
+    const rows = summaryData || [];
 
-    // Fetch splits for campaign payouts
     const payoutIds = rows.map(r => r.payout_id).filter(Boolean);
     let splitsByPayoutId = {};
     if (payoutIds.length > 0) {
@@ -54,24 +51,8 @@ export default function CreatorPayments() {
       });
     }
 
-    // Fetch splits for reward payouts
-    const rewardPayoutIds = rewardRows.map(r => r.payout_id).filter(Boolean);
-    let rewardSplitsByPayoutId = {};
-    if (rewardPayoutIds.length > 0) {
-      const { data: rSplits } = await supabase
-        .from('payout_splits')
-        .select('*, destination:payment_destinations(name, account_type, account_last4, institution, memo)')
-        .in('payout_id', rewardPayoutIds);
-      (rSplits || []).forEach(s => {
-        if (!rewardSplitsByPayoutId[s.payout_id]) rewardSplitsByPayoutId[s.payout_id] = [];
-        rewardSplitsByPayoutId[s.payout_id].push(s);
-      });
-    }
-
     setRows(rows);
     setSplitsByPayoutId(splitsByPayoutId);
-    setRewardEntries(rewardRows);
-    setRewardSplitsByPayoutId(rewardSplitsByPayoutId);
     setLoading(false);
   }
 
@@ -83,7 +64,6 @@ export default function CreatorPayments() {
     return true;
   });
 
-  // All 6 tiles use filtered rows so they respond to month filter
   const totalContracted    = filtered.reduce((s, r) => s + (r.contracted_rate || 0), 0);
   const totalAgencyPaid    = filtered.filter(r => !isInKind(r.payment_method) && r.agency_payment_status === 'Paid').reduce((s, r) => s + (r.invoice_amount || r.contracted_rate || 0), 0);
   const totalPaidToMe      = filtered.filter(r => !isInKind(r.payment_method) && r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
@@ -111,7 +91,6 @@ export default function CreatorPayments() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="stats-row" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Total Contracted</div></div>
         <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(totalAgencyPaid)}</div><div className="stat-label">Agency Paid</div></div>
@@ -122,7 +101,6 @@ export default function CreatorPayments() {
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
       </div>
 
-      {/* Payout filter */}
       <div className="filters-row">
         {['all', 'Pending', 'Partial', 'Paid', 'On Hold', 'N/A'].map(s => (
           <button key={s} className={`filter-chip ${payoutFilter === s ? 'active' : ''}`} onClick={() => setPayoutFilter(s)}>
@@ -139,7 +117,6 @@ export default function CreatorPayments() {
         </div>
       ) : (
         <>
-          {/* Cash payments table */}
           {filtered.filter(r => !isInKind(r.payment_method)).length > 0 && (
             <div className="table-wrap">
               <table>
@@ -215,7 +192,6 @@ export default function CreatorPayments() {
             </div>
           )}
 
-          {/* In-kind table */}
           {filtered.filter(r => isInKind(r.payment_method)).length > 0 && (
             <div style={{ marginTop: 24 }}>
               <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 10 }}>
@@ -252,104 +228,6 @@ export default function CreatorPayments() {
         </>
       )}
 
-      {/* ── PLATFORM REWARDS ── */}
-      {rewardEntries.length > 0 && (
-        <div style={{ marginTop: 36 }}>
-          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 14 }}>
-            PLATFORM REWARDS
-          </div>
-
-          {/* Reward tiles */}
-          <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
-            <div className="stat-card">
-              <div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.reduce((s, e) => s + (e.gross_amount || 0), 0))}</div>
-              <div className="stat-label">Total Earned</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0))}</div>
-              <div className="stat-label">Paid to Me</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0))}</div>
-              <div className="stat-label">Pending Payout</div>
-            </div>
-          </div>
-
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Platform</th>
-                  <th>Program</th>
-                  <th>Period</th>
-                  <th>Gross Earned</th>
-                  <th>Destination</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Sent</th>
-                  <th>Cleared</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rewardEntries.map(e => {
-                  const splits = rewardSplitsByPayoutId[e.payout_id] || [];
-                  const periodLabel = e.period_month
-                    ? (() => { const d = new Date(e.period_month + 'T12:00:00'); return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); })()
-                    : '—';
-
-                  if (splits.length === 0) {
-                    return (
-                      <tr key={e.entry_id}>
-                        <td>{e.platform_name || '—'}</td>
-                        <td>{e.program_name}</td>
-                        <td style={{ fontWeight: 500 }}>{periodLabel}</td>
-                        <td style={{ fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
-                        <td className="text-muted text-xs">—</td>
-                        <td>{e.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(e.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
-                        <td><span style={{ fontSize: 11, fontWeight: 600, color: e.payout_status === 'Paid' ? 'var(--green)' : 'var(--orange)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{e.payout_status || 'Pending'}</span></td>
-                        <td className="text-muted">—</td>
-                        <td className="text-muted">—</td>
-                      </tr>
-                    );
-                  }
-
-                  return splits.map((s, i) => {
-                    const dest = s.destination;
-                    const statusColor = s.split_status === 'Cleared' ? 'var(--green)' : s.split_status === 'Sent' ? 'var(--accent)' : s.split_status === 'Failed' ? 'var(--red)' : 'var(--text-muted)';
-                    const destSubline = dest?.account_type === 'Other'
-                      ? (s.notes || e.payout_notes || 'Other')
-                      : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`;
-
-                    return (
-                      <tr key={`${e.entry_id}-${s.id}`}>
-                        {i === 0 ? (
-                          <>
-                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.platform_name || '—'}</td>
-                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.program_name}</td>
-                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 500 }}>{periodLabel}</td>
-                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
-                          </>
-                        ) : null}
-                        <td>
-                          <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
-                          <div className="text-muted" style={{ fontSize: 10 }}>{destSubline}</div>
-                        </td>
-                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(s.amount)}</td>
-                        <td><span style={{ fontSize: 11, fontWeight: 600, color: statusColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.split_status}</span></td>
-                        <td style={{ fontSize: 12 }}>{s.sent_date ? fmtDate(s.sent_date) : <span className="text-muted">—</span>}</td>
-                        <td style={{ fontSize: 12, color: s.cleared_date ? 'var(--green)' : 'var(--text-muted)' }}>
-                          {s.cleared_date ? `✓ ${fmtDate(s.cleared_date)}` : '—'}
-                        </td>
-                      </tr>
-                    );
-                  });
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {selected && (
         <CreatorPaymentDetail
           row={selected}
@@ -362,7 +240,7 @@ export default function CreatorPayments() {
 }
 
 // ============================================================
-// Creator Payment Detail Panel - read-only, full detail
+// Creator Payment Detail Panel - read-only
 // ============================================================
 function CreatorPaymentDetail({ row, profileId, onClose }) {
   const [payout, setPayout] = useState(null);
@@ -398,15 +276,12 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, letterSpacing: 1 }}>{row.campaign_name}</div>
         <div className="text-muted mt-4">{row.brand_name}</div>
         <div style={{ color: 'var(--accent)', fontWeight: 700, fontSize: 20, marginTop: 8 }}>{fmtMoney(row.contracted_rate)}</div>
-        <div className="mt-8">
-          <Badge status={row.agency_payment_status || 'Not Invoiced'} />
-        </div>
+        <div className="mt-8"><Badge status={row.agency_payment_status || 'Not Invoiced'} /></div>
       </div>
 
       <div className="detail-body">
         {loading ? <div className="text-muted">Loading...</div> : (
           <>
-            {/* Agency payment status */}
             <div className="detail-section">
               <div className="detail-section-title">AGENCY PAYMENT</div>
               <div className="detail-grid">
@@ -447,15 +322,10 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
               </div>
             </div>
 
-            {/* Payout */}
             <div className="detail-section">
               <div className="detail-section-title">YOUR PAYOUT</div>
               {isInKind(invoice?.payment_method) ? (
-                <div style={{
-                  padding: '12px 14px', borderRadius: 6, fontSize: 12,
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)',
-                  color: 'var(--text-muted)', lineHeight: 1.7,
-                }}>
+                <div style={{ padding: '12px 14px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-muted)', lineHeight: 1.7 }}>
                   <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>In-Kind Campaign</div>
                   This campaign was compensated in kind. No cash payout applies.
                 </div>
@@ -486,7 +356,6 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                     )}
                   </div>
 
-                  {/* Destination splits */}
                   <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-dim)', marginBottom: 10 }}>
                     DESTINATION BREAKDOWN
                   </div>
@@ -494,21 +363,13 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                   {splits.length === 0 ? (
                     <div className="text-muted text-sm">No splits recorded yet.</div>
                   ) : (
-                    splits.map((s, i) => {
+                    splits.map(s => {
                       const dest = s.destination;
                       return (
-                        <div key={s.id} style={{
-                          background: 'var(--surface2)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 6,
-                          padding: '14px 16px',
-                          marginBottom: 10,
-                        }}>
+                        <div key={s.id} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: '14px 16px', marginBottom: 10 }}>
                           <div className="flex items-center justify-between mb-10">
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>
-                                {dest?.name || 'Unknown destination'}
-                              </div>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{dest?.name || 'Unknown destination'}</div>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                                 {dest?.account_type === 'Other'
                                   ? s.notes ? s.notes.slice(0, 50) + (s.notes.length > 50 ? '…' : '') : 'Other'
@@ -517,7 +378,6 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                             </div>
                             <SplitStatusBadge status={s.split_status} />
                           </div>
-
                           <div className="detail-grid">
                             <div>
                               <div className="detail-item-label">Percentage</div>
@@ -525,9 +385,7 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                             </div>
                             <div>
                               <div className="detail-item-label">Amount</div>
-                              <div className="detail-item-value" style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 16 }}>
-                                {fmtMoney(s.amount)}
-                              </div>
+                              <div className="detail-item-value" style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 16 }}>{fmtMoney(s.amount)}</div>
                             </div>
                             {s.sent_date && (
                               <div>
@@ -553,7 +411,6 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                     })
                   )}
 
-                  {/* Total verification */}
                   {splits.length > 1 && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 13, color: 'var(--text-muted)', marginTop: 8, gap: 12 }}>
                       <span>Total across {splits.length} destinations:</span>
