@@ -20,10 +20,15 @@ const NAV = [
 export default function CreatorDashboard() {
   const [activeView, setActiveView] = useState('overview');
   const [pendingCampaignId, setPendingCampaignId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   function navigateToCampaign(campaignId) {
     setPendingCampaignId(campaignId);
     setActiveView('campaigns');
+  }
+
+  function triggerRefresh() {
+    setRefreshKey(k => k + 1);
   }
 
   const show = (view) => ({ display: activeView === view ? 'block' : 'none' });
@@ -33,11 +38,12 @@ export default function CreatorDashboard() {
       <Sidebar navItems={NAV} activeView={activeView} setActiveView={setActiveView} />
       <div className="main-content">
         <div style={show('overview')}>
-          <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} />
+          <CreatorOverview setActiveView={setActiveView} navigateToCampaign={navigateToCampaign} refreshKey={refreshKey} />
         </div>
         <div style={show('campaigns')}>
           <CreatorCampaigns
             pendingCampaignId={pendingCampaignId}
+            onCampaignStatusChanged={triggerRefresh}
           />
         </div>
         <div style={show('payments')}>

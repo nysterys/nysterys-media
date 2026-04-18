@@ -9,12 +9,13 @@ function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
-export default function CreatorOverview({ setActiveView, navigateToCampaign }) {
+export default function CreatorOverview({ setActiveView, navigateToCampaign, refreshKey }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
+  useEffect(() => { if (refreshKey > 0) fetchData(); }, [refreshKey]);
 
   async function fetchData() {
     const { data } = await supabase

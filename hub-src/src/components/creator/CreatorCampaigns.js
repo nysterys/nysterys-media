@@ -18,7 +18,7 @@ function openPopup(url) {
   window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
 }
 
-export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }) {
+export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened, onCampaignStatusChanged }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -272,7 +272,10 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened }
           tab={tab}
           setTab={setTab}
           onClose={() => setSelected(null)}
-          onUpdated={() => { fetch(); }}
+          onUpdated={() => {
+            fetch();
+            if (onCampaignStatusChanged) onCampaignStatusChanged();
+          }}
         />
       )}
     </div>
