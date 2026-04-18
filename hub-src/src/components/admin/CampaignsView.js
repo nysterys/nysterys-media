@@ -363,7 +363,7 @@ export default function CampaignsView() {
         {months.length > 0 && (
           <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
             <option value="all">All months</option>
-            {months.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+            {months.map(m => { const [y, mo] = m.split('-'); return <option key={m} value={m}>{new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>; })}
           </select>
         )}
       </div>
