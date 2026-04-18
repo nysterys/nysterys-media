@@ -9,10 +9,34 @@ function isInKind(paymentMethod) {
   return (paymentMethod || '').toLowerCase() === 'in kind';
 }
 
+function lastMonth() {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function buildPeriodOptions(months) {
+  return [
+    { value: 'all', label: 'All time' },
+    { value: 'ytd', label: 'Year to date' },
+    ...months.map(m => ({ value: m, label: new Date(parseInt(m.split('-')[0]), parseInt(m.split('-')[1]) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) })),
+  ];
+}
+
+function inPeriod(dateStr, period) {
+  if (!dateStr) return period === 'all';
+  if (period === 'all') return true;
+  if (period === 'ytd') return dateStr.startsWith(String(new Date().getFullYear()));
+  return dateStr.startsWith(period);
+}
+
 export default function CreatorOverview({ setActiveView, navigateToCampaign, refreshKey }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
+  const [allRewards, setAllRewards] = useState([]);
   const [rewardsPaid, setRewardsPaid] = useState(0);
+  const [campaignPeriod, setCampaignPeriod] = useState(lastMonth());
+  const [rewardPeriod, setRewardPeriod] = useState(lastMonth());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
@@ -34,6 +58,7 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
     ]);
     setCampaigns(data || []);
     const rPaid = (rewardsRes.data || []).filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
+    setAllRewards(rewardsRes.data || []);
     setRewardsPaid(rPaid);
     setLoading(false);
   }
@@ -73,6 +98,24 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
       .map(d => ({ ...d, campaign: c }))
   ).sort((a, b) => a.contracted_post_date > b.contracted_post_date ? 1 : -1);
 
+  // Campaign months from payout dates
+  const campaignMonths = [...new Set(campaigns.flatMap(c => c.creator_payouts || []).map(p => p.payout_date?.slice(0,7)).filter(Boolean))].sort().reverse();
+  const rewardMonths = [...new Set(allRewards.map(e => e.period_month?.slice(0,7)).filter(Boolean))].sort().reverse();
+
+  // Period-filtered totals
+  const filteredEarned = campaigns.filter(c => {
+    const p = c.creator_payouts?.[0];
+    return p?.payout_status === 'Paid' && inPeriod(p?.payout_date, campaignPeriod);
+  }).reduce((s, c) => {
+    const inv = c.invoices?.[0];
+    if (isInKind(inv?.payment_method)) return s;
+    return s + (c.creator_payouts?.[0]?.payout_amount || 0);
+  }, 0);
+
+  const filteredRewardsPaid = allRewards.filter(e =>
+    e.payout_status === 'Paid' && inPeriod(e.period_month, rewardPeriod)
+  ).reduce((s, e) => s + (e.payout_amount || 0), 0);
+
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
   return (
@@ -98,12 +141,22 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
           <div className="stat-value stat-orange">{needsAction.length}</div>
           <div className="stat-label">Need Action</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-value stat-green">{fmtMoney(totalEarned)}</div>
+        <div className="stat-card" style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 10, right: 10 }}>
+            <select className="form-select" style={{ padding: '2px 6px', fontSize: 10, width: 'auto' }} value={campaignPeriod} onChange={e => setCampaignPeriod(e.target.value)}>
+              {buildPeriodOptions(campaignMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="stat-value stat-green">{fmtMoney(filteredEarned)}</div>
           <div className="stat-label">Campaign Earnings</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-value stat-green">{fmtMoney(rewardsPaid)}</div>
+        <div className="stat-card" style={{ position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 10, right: 10 }}>
+            <select className="form-select" style={{ padding: '2px 6px', fontSize: 10, width: 'auto' }} value={rewardPeriod} onChange={e => setRewardPeriod(e.target.value)}>
+              {buildPeriodOptions(rewardMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="stat-value stat-green">{fmtMoney(filteredRewardsPaid)}</div>
           <div className="stat-label">Rewards Paid to Me</div>
         </div>
       </div>

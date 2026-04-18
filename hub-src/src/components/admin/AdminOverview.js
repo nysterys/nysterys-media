@@ -50,10 +50,10 @@ export default function AdminOverview({ setActiveView }) {
         *, agency:agencies(name),
         creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
         campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name)),
-        invoices(payment_status, invoice_amount, payment_method, you_received_date),
+        invoices(payment_status, invoice_amount, payment_method, you_received_date, invoice_date, processing_fee),
         creator_payouts(payout_status, payout_amount)
       `).order('created_at', { ascending: false }),
-      supabase.from('invoices').select('payment_status, invoice_amount, payment_method, you_received_date, processing_fee, campaign_id').not('campaign_id', 'is', null),
+      supabase.from('invoices').select('payment_status, invoice_amount, payment_method, you_received_date, invoice_date, processing_fee, campaign_id').not('campaign_id', 'is', null),
       supabase.from('creator_payouts').select('payout_status, payout_amount, campaign_id').not('campaign_id', 'is', null),
       supabase.from('reward_payout_summary').select('*').order('period_month', { ascending: false }),
     ]);
@@ -108,14 +108,14 @@ export default function AdminOverview({ setActiveView }) {
   const { campaigns, invoices, payouts, active, needsAttentionGrouped, agencyPending, payoutsPending } = data;
 
   // Campaign KPIs filtered by campaignPeriod
-  const filtInvoices = invoices.filter(i => inPeriod(i.you_received_date, campaignPeriod));
+  const filtInvoices = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, campaignPeriod));
   const filtPayouts  = payouts.filter(p => {
     const inv = invoices.find(i => i.campaign_id === p.campaign_id);
-    return inPeriod(inv?.you_received_date, campaignPeriod);
+    return inPeriod(inv?.invoice_date || inv?.you_received_date, campaignPeriod);
   });
   const filtCampaigns = campaigns.filter(c => {
     const inv = c.invoices?.[0];
-    return inPeriod(inv?.you_received_date, campaignPeriod);
+    return inPeriod(inv?.invoice_date || inv?.you_received_date, campaignPeriod);
   });
 
   const totalContracted = campaignPeriod === 'all'
@@ -136,7 +136,7 @@ export default function AdminOverview({ setActiveView }) {
   const rTotalFees     = filtRewards.reduce((s, e) => s + (e.processing_fee || 0), 0);
 
   // Month lists for dropdowns
-  const campaignMonths = [...new Set(invoices.map(i => i.you_received_date?.slice(0, 7)).filter(Boolean))].sort().reverse();
+  const campaignMonths = [...new Set(invoices.map(i => (i.invoice_date || i.you_received_date)?.slice(0, 7)).filter(Boolean))].sort().reverse();
   const rewardMonths   = [...new Set(rewards.map(e => e.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
 
   const tileGroupStyle = {
@@ -196,12 +196,13 @@ export default function AdminOverview({ setActiveView }) {
             {buildPeriodOptions(rewardMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: 12 }}>
+        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
           <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(rTotalGross)}</div><div className="stat-label">Gross Earned</div></div>
           <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(rTotalReceived)}</div><div className="stat-label">You Received</div></div>
           <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(rTotalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
           <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(rTotalPending)}</div><div className="stat-label">Pending Payout</div></div>
           <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: rTotalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(rTotalFees)}</div><div className="stat-label">Fees Paid</div></div>
+          <div className="stat-card" style={{ visibility: 'hidden' }}></div>
         </div>
       </div>
 

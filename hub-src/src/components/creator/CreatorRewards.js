@@ -111,6 +111,7 @@ export default function CreatorRewards() {
                 <th>Program</th>
                 <th>Period</th>
                 <th>Gross Earned</th>
+                <th>Fees Paid</th>
                 <th>Destination</th>
                 <th>Amount</th>
                 <th>Status</th>
@@ -132,6 +133,7 @@ export default function CreatorRewards() {
                       <td>{e.program_name}</td>
                       <td style={{ fontWeight: 500 }}>{periodLabel}</td>
                       <td style={{ fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
+                      <td>{e.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 12 }}>{fmtMoney(e.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
                       <td className="text-muted text-xs">—</td>
                       <td>{e.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(e.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
                       <td><span style={{ fontSize: 11, fontWeight: 600, color: e.payout_status === 'Paid' ? 'var(--green)' : 'var(--orange)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{e.payout_status || 'Pending'}</span></td>
@@ -156,6 +158,7 @@ export default function CreatorRewards() {
                           <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.program_name}</td>
                           <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 500 }}>{periodLabel}</td>
                           <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
+                          <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 12 }}>{fmtMoney(e.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
                         </>
                       ) : null}
                       <td>
