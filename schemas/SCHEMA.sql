@@ -938,3 +938,98 @@ create event trigger coupler_table_recreation_trigger
   on ddl_command_end
   when tag in ('CREATE TABLE', 'CREATE TABLE AS')
   execute function public.handle_coupler_table_recreation();
+
+-- ============================================================
+-- PLATFORM REWARDS
+-- ============================================================
+
+-- Programs: one per platform reward scheme (e.g. TikTok Creator Rewards)
+create table public.platform_rewards_programs (
+  id uuid default uuid_generate_v4() primary key,
+  platform_id uuid references public.platforms(id) on delete set null,
+  name text not null,
+  description text,
+  payout_day int default 15 check (payout_day between 1 and 28), -- day of following month
+  is_active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Monthly entries: one per creator per program per month
+create table public.platform_reward_entries (
+  id uuid default uuid_generate_v4() primary key,
+  program_id uuid references public.platform_rewards_programs(id) on delete cascade not null,
+  profile_id uuid references public.profiles(id) on delete cascade not null,
+  period_month date not null, -- first of month: 2026-03-01
+  gross_amount numeric(10,2),
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(program_id, profile_id, period_month)
+);
+
+-- Invoices for rewards: reuse invoices table with reward_entry_id
+alter table public.invoices add column if not exists reward_entry_id uuid references public.platform_reward_entries(id) on delete set null;
+
+-- Payouts for rewards: reuse creator_payouts with reward_entry_id
+alter table public.creator_payouts add column if not exists reward_entry_id uuid references public.platform_reward_entries(id) on delete set null;
+
+-- RLS
+alter table public.platform_rewards_programs enable row level security;
+alter table public.platform_reward_entries enable row level security;
+
+create policy "Admin manages reward programs" on public.platform_rewards_programs
+  for all using (public.get_my_role() = 'admin');
+create policy "Authenticated read reward programs" on public.platform_rewards_programs
+  for select using (auth.role() = 'authenticated');
+
+create policy "Admin manages reward entries" on public.platform_reward_entries
+  for all using (public.get_my_role() = 'admin');
+create policy "Creators read own reward entries" on public.platform_reward_entries
+  for select using (public.get_my_role() = 'creator' and profile_id = auth.uid());
+
+-- Trigger for updated_at
+create trigger handle_updated_at_reward_programs before update on public.platform_rewards_programs
+  for each row execute function public.handle_updated_at();
+create trigger handle_updated_at_reward_entries before update on public.platform_reward_entries
+  for each row execute function public.handle_updated_at();
+
+-- Summary view: joins entries with their invoice and payout
+create or replace view public.reward_payout_summary
+with (security_invoker = true) as
+select
+  e.id as entry_id,
+  e.program_id,
+  p.name as program_name,
+  pl.name as platform_name,
+  p.payout_day,
+  e.profile_id,
+  pr.creator_name,
+  pr.full_name as creator_full_name,
+  e.period_month,
+  e.gross_amount,
+  e.notes as entry_notes,
+  inv.id as invoice_id,
+  inv.payment_status as agency_payment_status,
+  inv.payment_method,
+  inv.invoice_amount,
+  inv.amount_received,
+  inv.processing_fee,
+  inv.you_received,
+  inv.you_received_date,
+  inv.payment_received_date,
+  po.id as payout_id,
+  po.payout_status,
+  po.payout_amount,
+  po.payout_date,
+  po.payout_notes,
+  (select count(*) from public.payout_splits ps where ps.payout_id = po.id) as split_count,
+  (select count(*) from public.payout_splits ps where ps.payout_id = po.id and ps.split_status = 'Cleared') as splits_cleared
+from public.platform_reward_entries e
+join public.platform_rewards_programs p on p.id = e.program_id
+left join public.platforms pl on pl.id = p.platform_id
+join public.profiles pr on pr.id = e.profile_id
+left join public.invoices inv on inv.reward_entry_id = e.id
+left join public.creator_payouts po on po.reward_entry_id = e.id;
+
+grant select on public.reward_payout_summary to authenticated;

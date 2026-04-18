@@ -13,6 +13,8 @@ import PaymentDestinationsView from '../components/admin/PaymentDestinationsView
 
 import CalendarView from '../components/admin/CalendarView';
 
+import RewardsView from '../components/admin/RewardsView';
+
 const NAV = [
   {
     label: null,
@@ -21,6 +23,7 @@ const NAV = [
       { view: 'campaigns', icon: '◎', label: 'Campaigns' },
       { view: 'calendar', icon: '▦', label: 'Calendar' },
       { view: 'payments', icon: '◇', label: 'Payments' },
+      { view: 'rewards', icon: '★', label: 'Rewards' },
       { view: 'analytics', icon: '◉', label: 'Analytics' },
     ]
   },
@@ -46,6 +49,7 @@ export default function AdminDashboard() {
       case 'campaigns': return <CampaignsView />;
       case 'calendar': return <CalendarView />;
       case 'payments': return <PaymentsView />;
+      case 'rewards': return <RewardsView />;
       case 'analytics': return <AnalyticsView />;
       case 'agencies': return <AgenciesView />;
       case 'platforms': return <PlatformsView />;

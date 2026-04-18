@@ -22,6 +22,8 @@ export default function CreatorPayments() {
   const { profile } = useAuth();
   const [rows, setRows] = useState([]);
   const [splitsByPayoutId, setSplitsByPayoutId] = useState({});
+  const [rewardEntries, setRewardEntries] = useState([]);
+  const [rewardSplitsByPayoutId, setRewardSplitsByPayoutId] = useState({});
   const [loading, setLoading] = useState(true);
   const [monthFilter, setMonthFilter] = useState('all');
   const [payoutFilter, setPayoutFilter] = useState('all');
@@ -30,14 +32,15 @@ export default function CreatorPayments() {
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const { data } = await supabase
-      .from('campaign_payout_summary')
-      .select('*')
-      .eq('creator_profile_id', profile.id)
-      .order('invoice_date', { ascending: false, nullsFirst: false });
-    const rows = data || [];
+    const [summaryRes, rewardRes] = await Promise.all([
+      supabase.from('campaign_payout_summary').select('*').eq('creator_profile_id', profile.id).order('invoice_date', { ascending: false, nullsFirst: false }),
+      supabase.from('reward_payout_summary').select('*').eq('profile_id', profile.id).order('period_month', { ascending: false }),
+    ]);
 
-    // Fetch splits for all payouts
+    const rows = summaryRes.data || [];
+    const rewardRows = rewardRes.data || [];
+
+    // Fetch splits for campaign payouts
     const payoutIds = rows.map(r => r.payout_id).filter(Boolean);
     let splitsByPayoutId = {};
     if (payoutIds.length > 0) {
@@ -51,8 +54,24 @@ export default function CreatorPayments() {
       });
     }
 
+    // Fetch splits for reward payouts
+    const rewardPayoutIds = rewardRows.map(r => r.payout_id).filter(Boolean);
+    let rewardSplitsByPayoutId = {};
+    if (rewardPayoutIds.length > 0) {
+      const { data: rSplits } = await supabase
+        .from('payout_splits')
+        .select('*, destination:payment_destinations(name, account_type, account_last4, institution, memo)')
+        .in('payout_id', rewardPayoutIds);
+      (rSplits || []).forEach(s => {
+        if (!rewardSplitsByPayoutId[s.payout_id]) rewardSplitsByPayoutId[s.payout_id] = [];
+        rewardSplitsByPayoutId[s.payout_id].push(s);
+      });
+    }
+
     setRows(rows);
     setSplitsByPayoutId(splitsByPayoutId);
+    setRewardEntries(rewardRows);
+    setRewardSplitsByPayoutId(rewardSplitsByPayoutId);
     setLoading(false);
   }
 
@@ -231,6 +250,104 @@ export default function CreatorPayments() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── PLATFORM REWARDS ── */}
+      {rewardEntries.length > 0 && (
+        <div style={{ marginTop: 36 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 14 }}>
+            PLATFORM REWARDS
+          </div>
+
+          {/* Reward tiles */}
+          <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 16 }}>
+            <div className="stat-card">
+              <div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.reduce((s, e) => s + (e.gross_amount || 0), 0))}</div>
+              <div className="stat-label">Total Earned</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0))}</div>
+              <div className="stat-label">Paid to Me</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(rewardEntries.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0))}</div>
+              <div className="stat-label">Pending Payout</div>
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Platform</th>
+                  <th>Program</th>
+                  <th>Period</th>
+                  <th>Gross Earned</th>
+                  <th>Destination</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Sent</th>
+                  <th>Cleared</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rewardEntries.map(e => {
+                  const splits = rewardSplitsByPayoutId[e.payout_id] || [];
+                  const periodLabel = e.period_month
+                    ? (() => { const d = new Date(e.period_month + 'T12:00:00'); return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); })()
+                    : '—';
+
+                  if (splits.length === 0) {
+                    return (
+                      <tr key={e.entry_id}>
+                        <td>{e.platform_name || '—'}</td>
+                        <td>{e.program_name}</td>
+                        <td style={{ fontWeight: 500 }}>{periodLabel}</td>
+                        <td style={{ fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
+                        <td className="text-muted text-xs">—</td>
+                        <td>{e.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(e.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
+                        <td><span style={{ fontSize: 11, fontWeight: 600, color: e.payout_status === 'Paid' ? 'var(--green)' : 'var(--orange)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{e.payout_status || 'Pending'}</span></td>
+                        <td className="text-muted">—</td>
+                        <td className="text-muted">—</td>
+                      </tr>
+                    );
+                  }
+
+                  return splits.map((s, i) => {
+                    const dest = s.destination;
+                    const statusColor = s.split_status === 'Cleared' ? 'var(--green)' : s.split_status === 'Sent' ? 'var(--accent)' : s.split_status === 'Failed' ? 'var(--red)' : 'var(--text-muted)';
+                    const destSubline = dest?.account_type === 'Other'
+                      ? (s.notes || e.payout_notes || 'Other')
+                      : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`;
+
+                    return (
+                      <tr key={`${e.entry_id}-${s.id}`}>
+                        {i === 0 ? (
+                          <>
+                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.platform_name || '—'}</td>
+                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>{e.program_name}</td>
+                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 500 }}>{periodLabel}</td>
+                            <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
+                          </>
+                        ) : null}
+                        <td>
+                          <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
+                          <div className="text-muted" style={{ fontSize: 10 }}>{destSubline}</div>
+                        </td>
+                        <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(s.amount)}</td>
+                        <td><span style={{ fontSize: 11, fontWeight: 600, color: statusColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.split_status}</span></td>
+                        <td style={{ fontSize: 12 }}>{s.sent_date ? fmtDate(s.sent_date) : <span className="text-muted">—</span>}</td>
+                        <td style={{ fontSize: 12, color: s.cleared_date ? 'var(--green)' : 'var(--text-muted)' }}>
+                          {s.cleared_date ? `✓ ${fmtDate(s.cleared_date)}` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {selected && (
