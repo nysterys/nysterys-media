@@ -13,7 +13,8 @@ export default function CreatorRewards() {
   const [entries, setEntries] = useState([]);
   const [splitsByPayoutId, setSplitsByPayoutId] = useState({});
   const [loading, setLoading] = useState(true);
-  const [monthFilter, setMonthFilter] = useState('all');
+  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const [monthFilter, setMonthFilter] = useState(lastMonth);
   const [selected, setSelected] = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
@@ -54,6 +55,7 @@ export default function CreatorRewards() {
   const totalEarned  = filtered.reduce((s, e) => s + (e.gross_amount || 0), 0);
   const totalPaid    = filtered.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
   const totalPending = filtered.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
+  const totalFees    = filtered.reduce((s, e) => s + (e.processing_fee || 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
@@ -75,7 +77,7 @@ export default function CreatorRewards() {
         )}
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <div className="stat-card">
           <div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(totalEarned)}</div>
           <div className="stat-label">Total Earned</div>
@@ -87,6 +89,10 @@ export default function CreatorRewards() {
         <div className="stat-card">
           <div className="stat-value stat-orange" style={{ fontSize: 22 }}>{fmtMoney(totalPending)}</div>
           <div className="stat-label">Pending Payout</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ fontSize: 22, color: totalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(totalFees)}</div>
+          <div className="stat-label">Fees Paid</div>
         </div>
       </div>
 

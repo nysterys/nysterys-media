@@ -35,7 +35,8 @@ export default function PaymentsView() {
   const [agencyFilter, setAgencyFilter] = useState('all');
   const [payoutFilter, setPayoutFilter] = useState('all');
   const [creatorFilter, setCreatorFilter] = useState('all');
-  const [monthFilter, setMonthFilter] = useState('all');
+  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const [monthFilter, setMonthFilter] = useState(lastMonth);
   const [creators, setCreators] = useState([]);
   const [selected, setSelected] = useState(null);
 
@@ -144,7 +145,7 @@ export default function PaymentsView() {
         ))}
         {months.length > 0 && (
           <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All months</option>
+            <option value="all">All time</option>
             {months.map(m => <option key={m} value={m}>{fmtMonth(m)}</option>)}
           </select>
         )}

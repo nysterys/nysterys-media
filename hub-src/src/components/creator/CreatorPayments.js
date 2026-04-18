@@ -23,7 +23,8 @@ export default function CreatorPayments() {
   const [rows, setRows] = useState([]);
   const [splitsByPayoutId, setSplitsByPayoutId] = useState({});
   const [loading, setLoading] = useState(true);
-  const [monthFilter, setMonthFilter] = useState('all');
+  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const [monthFilter, setMonthFilter] = useState(lastMonth);
   const [payoutFilter, setPayoutFilter] = useState('all');
   const [selected, setSelected] = useState(null);
 

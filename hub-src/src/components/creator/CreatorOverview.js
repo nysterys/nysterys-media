@@ -12,13 +12,15 @@ function isInKind(paymentMethod) {
 export default function CreatorOverview({ setActiveView, navigateToCampaign, refreshKey }) {
   const { profile } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
+  const [rewardsPaid, setRewardsPaid] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { fetchData(); }, []);
   useEffect(() => { if (refreshKey > 0) fetchData(); }, [refreshKey]);
 
   async function fetchData() {
-    const { data } = await supabase
+    const [{ data }, rewardsRes] = await Promise.all([
+      supabase
       .from('campaigns')
       .select(`
         *, agency:agencies(name),
@@ -27,8 +29,12 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
         creator_payouts(payout_status, payout_amount)
       `)
       .eq('creator_profile_id', profile.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false }),
+      supabase.from('reward_payout_summary').select('payout_status, payout_amount').eq('profile_id', profile.id),
+    ]);
     setCampaigns(data || []);
+    const rPaid = (rewardsRes.data || []).filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
+    setRewardsPaid(rPaid);
     setLoading(false);
   }
 
@@ -94,7 +100,11 @@ export default function CreatorOverview({ setActiveView, navigateToCampaign, ref
         </div>
         <div className="stat-card">
           <div className="stat-value stat-green">{fmtMoney(totalEarned)}</div>
-          <div className="stat-label">Total Paid to You</div>
+          <div className="stat-label">Campaign Earnings</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value stat-green">{fmtMoney(rewardsPaid)}</div>
+          <div className="stat-label">Rewards Paid to Me</div>
         </div>
       </div>
 

@@ -33,7 +33,8 @@ export default function RewardsView() {
   const [creators, setCreators] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [monthFilter, setMonthFilter] = useState('all');
+  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
+  const [monthFilter, setMonthFilter] = useState(lastMonth);
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [programFilter, setProgramFilter] = useState('all');
   const [selected, setSelected] = useState(null);
@@ -68,6 +69,7 @@ export default function RewardsView() {
   const totalReceived = filtered.filter(e => e.you_received).reduce((s, e) => s + (e.amount_received || e.invoice_amount || 0), 0);
   const totalPaidOut  = filtered.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
   const totalPending  = filtered.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
+  const totalFees     = filtered.reduce((s, e) => s + (e.processing_fee || 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
@@ -84,11 +86,12 @@ export default function RewardsView() {
         </div>
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(totalGross)}</div><div className="stat-label">Gross Earned</div></div>
         <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 22 }}>{fmtMoney(totalReceived)}</div><div className="stat-label">You Received</div></div>
         <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 22 }}>{fmtMoney(totalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
         <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 22 }}>{fmtMoney(totalPending)}</div><div className="stat-label">Pending Payout</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 22, color: totalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(totalFees)}</div><div className="stat-label">Fees Paid</div></div>
       </div>
 
       <div className="filters-row" style={{ flexWrap: 'wrap' }}>
@@ -101,7 +104,7 @@ export default function RewardsView() {
         {programs.map(p => <button key={p.id} className={`filter-chip ${programFilter === p.id ? 'active' : ''}`} onClick={() => setProgramFilter(p.id)}>{p.name}</button>)}
         {months.length > 0 && (
           <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All months</option>
+            <option value="all">All time</option>
             {months.map(m => { const [y, mo] = m.split('-'); return <option key={m} value={m}>{new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>; })}
           </select>
         )}
@@ -112,7 +115,7 @@ export default function RewardsView() {
           <thead>
             <tr>
               <th>Creator</th><th>Platform</th><th>Program</th><th>Period</th>
-              <th>Gross</th><th>Platform Status</th><th>You Received</th><th>Payout Status</th><th>Paid Out</th>
+              <th>Gross</th><th>Platform Status</th><th>You Received</th><th>Fees Paid</th><th>Payout Status</th><th>Paid Out</th>
             </tr>
           </thead>
           <tbody>
@@ -126,6 +129,7 @@ export default function RewardsView() {
                 <td>{e.period_month ? new Date(e.period_month + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—'}</td>
                 <td style={{ fontWeight: 600 }}>{fmtMoney(e.gross_amount)}</td>
                 <td><Badge status={e.agency_payment_status || 'Not Invoiced'} /></td>
+                <td>{e.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontWeight: 600, fontSize: 12 }}>{fmtMoney(e.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
                 <td>{e.you_received ? <span style={{ color: 'var(--green)', fontWeight: 600, fontSize: 12 }}>✓ {fmtDate(e.you_received_date)}</span> : <span className="text-muted text-xs">Not yet</span>}</td>
                 <td><PayoutBadge status={e.payout_status || 'Pending'} /></td>
                 <td>{e.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(e.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
