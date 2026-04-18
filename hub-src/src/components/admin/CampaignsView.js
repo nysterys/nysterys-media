@@ -410,6 +410,7 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
   const [c, setC] = useState(campaign);
   const [editingStatus, setEditingStatus] = useState(false);
   const [editingPayment, setEditingPayment] = useState(false);
+  const [showEditCampaign, setShowEditCampaign] = useState(false);
   const [showAddRevision, setShowAddRevision] = useState(null);
   const [showEditDeliverable, setShowEditDeliverable] = useState(null);
   const [showAddDeliverable, setShowAddDeliverable] = useState(false);
@@ -459,6 +460,7 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, letterSpacing: 1 }}>{c.campaign_name}</div>
         <div className="text-muted mt-4">{c.brand_name} · {c.agency?.name || 'No agency'}</div>
         <div className="mt-8" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowEditCampaign(true)}>Edit Campaign</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setEditingStatus(true)}>Update Status</button>
           <button className="btn btn-secondary btn-sm" onClick={() => setEditingPayment(true)}>Update Payment</button>
         </div>
@@ -483,37 +485,7 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
         )}
 
         {tab === 'details' && (
-          <div>
-            <div className="detail-section">
-              <div className="detail-section-title">Deal Info</div>
-              <div className="detail-grid">
-                <div><div className="detail-item-label">Creator</div><div className="detail-item-value">{c.creator?.creator_name || c.creator?.full_name || '—'}</div></div>
-                <div><div className="detail-item-label">Status</div><div className="detail-item-value"><Badge status={c.status} /></div></div>
-                <div><div className="detail-item-label">Contracted Rate</div><div className="detail-item-value" style={{ color: 'var(--accent)', fontWeight: 600 }}>{fmtMoney(c.contracted_rate)}</div></div>
-                <div><div className="detail-item-label">Rush Premium</div><div className="detail-item-value">{c.is_rush ? fmtMoney(c.rush_premium) : '—'}</div></div>
-                <div><div className="detail-item-label">Deal Signed</div><div className="detail-item-value">{fmtDate(c.deal_signed_date)}</div></div>
-                <div><div className="detail-item-label">Campaign Period</div><div className="detail-item-value">{fmtDate(c.campaign_start_date)} → {fmtDate(c.campaign_end_date)}</div></div>
-              </div>
-            </div>
-            {c.brief && (
-              <div className="detail-section">
-                <div className="detail-section-title">Brief</div>
-                <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>{c.brief}</div>
-              </div>
-            )}
-            {c.usage_rights_notes && (
-              <div className="detail-section">
-                <div className="detail-section-title">Usage Rights</div>
-                <div style={{ fontSize: 13, color: 'var(--text)' }}>{c.usage_rights_notes}</div>
-              </div>
-            )}
-            {c.admin_notes && (
-              <div className="detail-section">
-                <div className="detail-section-title">Notes</div>
-                <div style={{ fontSize: 13, color: 'var(--text)' }}>{c.admin_notes}</div>
-              </div>
-            )}
-          </div>
+          <DetailsTab campaign={c} agencies={agencies} creators={creators} onUpdated={onUpdated} />
         )}
 
         {tab === 'invoice' && (
@@ -542,6 +514,328 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
           onClose={() => setEditingPayment(false)}
         />
       )}
+
+      {showEditCampaign && (
+        <EditCampaignModal
+          campaign={c}
+          agencies={agencies}
+          creators={creators}
+          onClose={() => setShowEditCampaign(false)}
+          onSaved={() => { setShowEditCampaign(false); onUpdated(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Details Tab — inline editable form
+// ============================================================
+function DetailsTab({ campaign, agencies, creators, onUpdated }) {
+  const [form, setForm] = useState({
+    campaign_name: campaign.campaign_name || '',
+    brand_name: campaign.brand_name || '',
+    agency_id: campaign.agency_id || '',
+    creator_profile_id: campaign.creator_profile_id || '',
+    contracted_rate: campaign.contracted_rate ?? '',
+    is_rush: campaign.is_rush || false,
+    rush_premium: campaign.rush_premium ?? '',
+    deal_signed_date: campaign.deal_signed_date || '',
+    campaign_start_date: campaign.campaign_start_date || '',
+    campaign_end_date: campaign.campaign_end_date || '',
+    usage_rights_notes: campaign.usage_rights_notes || '',
+    brief: campaign.brief || '',
+    admin_notes: campaign.admin_notes || '',
+    status: campaign.status || 'Negotiating',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  function setF(k, v) { setForm(f => ({ ...f, [k]: v })); setSaved(false); }
+
+  async function save() {
+    if (!form.campaign_name.trim() || !form.brand_name.trim()) {
+      setError('Campaign name and brand name are required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const { error: err } = await supabase.from('campaigns').update({
+      campaign_name: form.campaign_name.trim(),
+      brand_name: form.brand_name.trim(),
+      agency_id: form.agency_id || null,
+      creator_profile_id: form.creator_profile_id || null,
+      contracted_rate: form.contracted_rate !== '' ? parseFloat(form.contracted_rate) : null,
+      is_rush: form.is_rush,
+      rush_premium: form.rush_premium !== '' ? parseFloat(form.rush_premium) : 0,
+      deal_signed_date: form.deal_signed_date || null,
+      campaign_start_date: form.campaign_start_date || null,
+      campaign_end_date: form.campaign_end_date || null,
+      usage_rights_notes: form.usage_rights_notes || null,
+      brief: form.brief || null,
+      admin_notes: form.admin_notes || null,
+      status: form.status,
+    }).eq('id', campaign.id);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    setSaved(true);
+    onUpdated();
+  }
+
+  return (
+    <div>
+      {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Campaign Name *</label>
+          <input className="form-input" value={form.campaign_name} onChange={e => setF('campaign_name', e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Brand Name *</label>
+          <input className="form-input" value={form.brand_name} onChange={e => setF('brand_name', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Creator</label>
+          <select className="form-select" value={form.creator_profile_id} onChange={e => setF('creator_profile_id', e.target.value)}>
+            <option value="">Select creator...</option>
+            {creators.map(c => <option key={c.id} value={c.id}>{c.creator_name || c.full_name}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Agency / Label</label>
+          <select className="form-select" value={form.agency_id} onChange={e => setF('agency_id', e.target.value)}>
+            <option value="">No agency</option>
+            {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Status</label>
+          <select className="form-select" value={form.status} onChange={e => setF('status', e.target.value)}>
+            {CAMPAIGN_STATUSES.map(s => <option key={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Deal Signed</label>
+          <input className="form-input" type="date" value={form.deal_signed_date} onChange={e => setF('deal_signed_date', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Contracted Rate ($)</label>
+          <input className="form-input" type="number" value={form.contracted_rate} onChange={e => setF('contracted_rate', e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Campaign Start</label>
+          <input className="form-input" type="date" value={form.campaign_start_date} onChange={e => setF('campaign_start_date', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Campaign End</label>
+          <input className="form-input" type="date" value={form.campaign_end_date} onChange={e => setF('campaign_end_date', e.target.value)} />
+        </div>
+        <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <label className="checkbox-row" style={{ marginBottom: 0 }}>
+            <input type="checkbox" checked={form.is_rush} onChange={e => setF('is_rush', e.target.checked)} />
+            Rush deal
+          </label>
+        </div>
+      </div>
+
+      {form.is_rush && (
+        <div className="form-group">
+          <label className="form-label">Rush Premium ($)</label>
+          <input className="form-input" type="number" value={form.rush_premium} onChange={e => setF('rush_premium', e.target.value)} />
+        </div>
+      )}
+
+      <div className="form-group">
+        <label className="form-label">Brief / Instructions</label>
+        <textarea className="form-textarea" value={form.brief} onChange={e => setF('brief', e.target.value)} placeholder="Campaign brief, talking points, requirements..." />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Usage Rights Notes</label>
+        <input className="form-input" value={form.usage_rights_notes} onChange={e => setF('usage_rights_notes', e.target.value)} placeholder="e.g. 6 months digital, no paid amplification..." />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Internal Notes</label>
+        <textarea className="form-textarea" value={form.admin_notes} onChange={e => setF('admin_notes', e.target.value)} style={{ minHeight: 60 }} />
+      </div>
+
+      <div className="flex items-center gap-12">
+        <button className="btn btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+        {saved && <span style={{ fontSize: 12, color: 'var(--green)' }}>Saved ✓</span>}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Edit Campaign Modal (quick edit from header button)
+// ============================================================
+function EditCampaignModal({ campaign, agencies, creators, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    campaign_name: campaign.campaign_name || '',
+    brand_name: campaign.brand_name || '',
+    agency_id: campaign.agency_id || '',
+    creator_profile_id: campaign.creator_profile_id || '',
+    contracted_rate: campaign.contracted_rate ?? '',
+    is_rush: campaign.is_rush || false,
+    rush_premium: campaign.rush_premium ?? '',
+    deal_signed_date: campaign.deal_signed_date || '',
+    campaign_start_date: campaign.campaign_start_date || '',
+    campaign_end_date: campaign.campaign_end_date || '',
+    usage_rights_notes: campaign.usage_rights_notes || '',
+    brief: campaign.brief || '',
+    admin_notes: campaign.admin_notes || '',
+    status: campaign.status || 'Negotiating',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function setF(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  async function save() {
+    if (!form.campaign_name.trim() || !form.brand_name.trim()) {
+      setError('Campaign name and brand name are required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const { error: err } = await supabase.from('campaigns').update({
+      campaign_name: form.campaign_name.trim(),
+      brand_name: form.brand_name.trim(),
+      agency_id: form.agency_id || null,
+      creator_profile_id: form.creator_profile_id || null,
+      contracted_rate: form.contracted_rate !== '' ? parseFloat(form.contracted_rate) : null,
+      is_rush: form.is_rush,
+      rush_premium: form.rush_premium !== '' ? parseFloat(form.rush_premium) : 0,
+      deal_signed_date: form.deal_signed_date || null,
+      campaign_start_date: form.campaign_start_date || null,
+      campaign_end_date: form.campaign_end_date || null,
+      usage_rights_notes: form.usage_rights_notes || null,
+      brief: form.brief || null,
+      admin_notes: form.admin_notes || null,
+      status: form.status,
+    }).eq('id', campaign.id);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 760 }}>
+        <div className="modal-header">
+          <div className="modal-title">EDIT CAMPAIGN</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Campaign Name *</label>
+              <input className="form-input" value={form.campaign_name} onChange={e => setF('campaign_name', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Brand Name *</label>
+              <input className="form-input" value={form.brand_name} onChange={e => setF('brand_name', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Creator</label>
+              <select className="form-select" value={form.creator_profile_id} onChange={e => setF('creator_profile_id', e.target.value)}>
+                <option value="">Select creator...</option>
+                {creators.map(c => <option key={c.id} value={c.id}>{c.creator_name || c.full_name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Agency / Label</label>
+              <select className="form-select" value={form.agency_id} onChange={e => setF('agency_id', e.target.value)}>
+                <option value="">No agency</option>
+                {agencies.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row-3">
+            <div className="form-group">
+              <label className="form-label">Contracted Rate ($)</label>
+              <input className="form-input" type="number" value={form.contracted_rate} onChange={e => setF('contracted_rate', e.target.value)} placeholder="0.00" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <select className="form-select" value={form.status} onChange={e => setF('status', e.target.value)}>
+                {CAMPAIGN_STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Deal Signed</label>
+              <input className="form-input" type="date" value={form.deal_signed_date} onChange={e => setF('deal_signed_date', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Campaign Start</label>
+              <input className="form-input" type="date" value={form.campaign_start_date} onChange={e => setF('campaign_start_date', e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Campaign End</label>
+              <input className="form-input" type="date" value={form.campaign_end_date} onChange={e => setF('campaign_end_date', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="checkbox-row">
+              <input type="checkbox" checked={form.is_rush} onChange={e => setF('is_rush', e.target.checked)} />
+              Rush deal
+            </label>
+          </div>
+          {form.is_rush && (
+            <div className="form-group">
+              <label className="form-label">Rush Premium ($)</label>
+              <input className="form-input" type="number" value={form.rush_premium} onChange={e => setF('rush_premium', e.target.value)} placeholder="0.00" />
+            </div>
+          )}
+
+          <div className="form-group">
+            <label className="form-label">Brief / Instructions</label>
+            <textarea className="form-textarea" value={form.brief} onChange={e => setF('brief', e.target.value)} placeholder="Campaign brief, talking points, requirements..." />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Usage Rights Notes</label>
+            <input className="form-input" value={form.usage_rights_notes} onChange={e => setF('usage_rights_notes', e.target.value)} placeholder="e.g. 6 months digital, no paid amplification..." />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Internal Notes</label>
+            <textarea className="form-textarea" value={form.admin_notes} onChange={e => setF('admin_notes', e.target.value)} style={{ minHeight: 60 }} />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -553,12 +847,25 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
   const [showAddRevision, setShowAddRevision] = useState(null);
   const [showMarkPosted, setShowMarkPosted] = useState(null);
   const [editingDeliverable, setEditingDeliverable] = useState(null);
+  const [editingRevision, setEditingRevision] = useState(null);
 
   const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
 
   const deliverables = campaign.campaign_deliverables || [];
   const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
   const postedCount = deliverables.filter(d => d.draft_status === 'Posted').length;
+
+  async function deleteDeliverable(d) {
+    if (!window.confirm(`Delete this ${d.platform?.name || 'platform'} deliverable? This will also delete all its revision rounds. This cannot be undone.`)) return;
+    await supabase.from('campaign_deliverables').delete().eq('id', d.id);
+    onUpdated();
+  }
+
+  async function deleteRevision(r) {
+    if (!window.confirm(`Delete Round ${r.round_number}? This cannot be undone.`)) return;
+    await supabase.from('revision_rounds').delete().eq('id', r.id);
+    onUpdated();
+  }
 
   return (
     <div>
@@ -592,11 +899,8 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
               {d.quantity > 1 && <span className="text-muted text-sm"> × {d.quantity}</span>}
             </div>
             <div className="flex items-center gap-8">
-              <button
-                className="btn btn-ghost btn-sm"
-                style={{ fontSize: 11, padding: '2px 8px' }}
-                onClick={() => setEditingDeliverable(d)}
-              >Edit</button>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setEditingDeliverable(d)}>Edit</button>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px', color: 'var(--red, #e74c3c)' }} onClick={() => deleteDeliverable(d)}>Delete</button>
               <Badge status={d.draft_status} />
             </div>
           </div>
@@ -605,13 +909,12 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
             <div className="text-muted text-sm mb-8">{d.deliverable_details}</div>
           )}
 
-          {/* TikTok video preview — shows once post_url is set and data is synced */}
+          {/* TikTok video preview */}
           {d.cover_image_url && (
             <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
               <a href={d.post_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                 style={{ flexShrink: 0, display: 'block', width: 72, height: 96, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                <img src={d.cover_image_url} alt="video thumbnail"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={d.cover_image_url} alt="video thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </a>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {d.video_title && (
@@ -631,20 +934,12 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
           )}
 
           <div className="flex gap-16 mb-12" style={{ fontSize: 12 }}>
-            <div>
-              <span className="text-muted">Due: </span>
-              <span>{fmtDate(d.contracted_post_date)}</span>
-            </div>
+            <div><span className="text-muted">Due: </span><span>{fmtDate(d.contracted_post_date)}</span></div>
             {d.actual_post_date && (
-              <div>
-                <span className="text-muted">Posted: </span>
-                <span style={{ color: 'var(--green)' }}>{fmtDate(d.actual_post_date)}</span>
-              </div>
+              <div><span className="text-muted">Posted: </span><span style={{ color: 'var(--green)' }}>{fmtDate(d.actual_post_date)}</span></div>
             )}
             {d.post_url && (
-              <a href={d.post_url} target="_blank" rel="noreferrer" className="link text-sm" onClick={e => e.stopPropagation()}>
-                View Post ↗
-              </a>
+              <a href={d.post_url} target="_blank" rel="noreferrer" className="link text-sm" onClick={e => e.stopPropagation()}>View Post ↗</a>
             )}
           </div>
 
@@ -657,7 +952,19 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
               <div key={r.id} className="revision-round">
                 <div className="revision-round-header">
                   <span className="round-number">Round {r.round_number}</span>
-                  <Badge status={r.agency_decision} />
+                  <div className="flex items-center gap-8">
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => setEditingRevision({ ...r, deliverable_id: d.id })}
+                    >Edit</button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 11, padding: '2px 8px', color: 'var(--red, #e74c3c)' }}
+                      onClick={() => deleteRevision(r)}
+                    >Delete</button>
+                    <Badge status={r.agency_decision} />
+                  </div>
                 </div>
                 {r.submitted_at && <div className="text-sm text-muted">Submitted: {fmtDate(r.submitted_at?.split('T')[0])}</div>}
                 {r.draft_url && <a href={r.draft_url} target="_blank" rel="noreferrer" className="link text-sm">View Draft ↗</a>}
@@ -717,6 +1024,104 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
           onSaved={() => { setEditingDeliverable(null); onUpdated(); }}
         />
       )}
+
+      {editingRevision && (
+        <EditRevisionModal
+          revision={editingRevision}
+          onClose={() => setEditingRevision(null)}
+          onSaved={() => { setEditingRevision(null); onUpdated(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditRevisionModal({ revision, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    round_number: revision.round_number || 1,
+    submitted_at: revision.submitted_at ? revision.submitted_at.split('T')[0] : '',
+    draft_url: revision.draft_url || '',
+    draft_notes: revision.draft_notes || '',
+    agency_decision: revision.agency_decision || 'Pending',
+    agency_feedback: revision.agency_feedback || '',
+    agency_response_date: revision.agency_response_date || '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await supabase.from('revision_rounds').update({
+      round_number: parseInt(form.round_number) || revision.round_number,
+      submitted_at: form.submitted_at ? new Date(form.submitted_at).toISOString() : null,
+      draft_url: form.draft_url || null,
+      draft_notes: form.draft_notes || null,
+      agency_decision: form.agency_decision,
+      agency_feedback: form.agency_feedback || null,
+      agency_response_date: form.agency_response_date || null,
+    }).eq('id', revision.id);
+
+    // Sync deliverable draft_status to latest round's decision
+    const statusMap = { 'Pending': 'Draft Submitted', 'Approved': 'Approved', 'Revisions Requested': 'Revisions Requested' };
+    await supabase.from('campaign_deliverables').update({
+      draft_status: statusMap[form.agency_decision] || 'Draft Submitted',
+    }).eq('id', revision.deliverable_id);
+
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <div className="modal-title" style={{ fontSize: 18 }}>EDIT ROUND {revision.round_number}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Round #</label>
+              <input className="form-input" type="number" min={1} value={form.round_number} onChange={e => setForm(f => ({ ...f, round_number: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Submitted Date</label>
+              <input className="form-input" type="date" value={form.submitted_at} onChange={e => setForm(f => ({ ...f, submitted_at: e.target.value }))} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Draft URL</label>
+            <input className="form-input" value={form.draft_url} onChange={e => setForm(f => ({ ...f, draft_url: e.target.value }))} placeholder="https://..." />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes</label>
+            <textarea className="form-textarea" value={form.draft_notes} onChange={e => setForm(f => ({ ...f, draft_notes: e.target.value }))} style={{ minHeight: 60 }} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Agency Decision</label>
+            <select className="form-select" value={form.agency_decision} onChange={e => setForm(f => ({ ...f, agency_decision: e.target.value }))}>
+              <option>Pending</option>
+              <option>Approved</option>
+              <option>Revisions Requested</option>
+            </select>
+          </div>
+          {form.agency_decision !== 'Pending' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Agency Response Date</label>
+                <input className="form-input" type="date" value={form.agency_response_date} onChange={e => setForm(f => ({ ...f, agency_response_date: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Agency Feedback</label>
+                <textarea className="form-textarea" value={form.agency_feedback} onChange={e => setForm(f => ({ ...f, agency_feedback: e.target.value }))} style={{ minHeight: 60 }} />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+        </div>
+      </div>
     </div>
   );
 }
