@@ -63,7 +63,8 @@ export default function AnalyticsView() {
     // Also fetch campaign deliverables that have TikTok posts for this creator
     const { data: campaignStats } = await supabase
       .from('campaign_deliverables_with_stats')
-      .select('*, campaign:campaigns(campaign_name, brand_name, agency:agencies(name))')
+      .select('*, campaign:campaigns!inner(campaign_name, brand_name, creator_profile_id, agency:agencies(name))')
+      .eq('campaign.creator_profile_id', selectedAccount.profile_id)
       .not('post_url', 'is', null)
       .not('views', 'is', null)
       .order('views', { ascending: false })
