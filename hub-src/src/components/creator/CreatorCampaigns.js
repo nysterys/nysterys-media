@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
@@ -17,21 +17,22 @@ export default function CreatorCampaigns({ initialCampaignId, onCampaignOpened }
   const [tab, setTab] = useState('deliverables');
   const [filter, setFilter] = useState('all');
 
+  // Capture on mount — parent clears it immediately after navigating so we need our own copy
+  const pendingCampaignId = useRef(initialCampaignId || null);
+
   useEffect(() => { fetch(); }, []);
 
-  // Auto-open campaign when navigated from overview
+  // Once campaigns load, open the pending campaign if one was requested
   useEffect(() => {
-    if (initialCampaignId && campaigns.length > 0) {
-      const target = campaigns.find(c => c.id === initialCampaignId);
-      if (target) {
-        setSelected(target);
-        setTab('deliverables');
-        if (onCampaignOpened) onCampaignOpened();
-      }
+    if (!pendingCampaignId.current || campaigns.length === 0) return;
+    const target = campaigns.find(c => c.id === pendingCampaignId.current);
+    if (target) {
+      setSelected(target);
+      setTab('deliverables');
+      pendingCampaignId.current = null;
+      if (onCampaignOpened) onCampaignOpened();
     }
-  }, [initialCampaignId, campaigns]);
-
-  useEffect(() => { fetch(); }, []);
+  }, [campaigns]);
 
   async function fetch() {
     const { data } = await supabase
