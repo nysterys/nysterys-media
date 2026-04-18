@@ -160,17 +160,17 @@ function RewardDetailPanel({ entry, programs, creators, onClose, onUpdated, onUp
   const isNew = entry?._new;
   const [tab, setTab] = useState('entry');
   const [entryData, setEntryData] = useState(null);
-  const [loading, setLoading] = useState(!isNew);
+  const [initialLoading, setInitialLoading] = useState(!isNew);
 
   useEffect(() => {
-    if (!isNew) fetchDetail();
+    if (!isNew) fetchDetail(true);
   }, [entry?.entry_id]);
 
-  async function fetchDetail() {
-    setLoading(true);
+  async function fetchDetail(initial = false) {
+    if (initial) setInitialLoading(true);
     const { data } = await supabase.from('reward_payout_summary').select('*').eq('entry_id', entry.entry_id).single();
     setEntryData(data);
-    setLoading(false);
+    if (initial) setInitialLoading(false);
   }
 
   const data = isNew ? null : (entryData || entry);
@@ -200,14 +200,14 @@ function RewardDetailPanel({ entry, programs, creators, onClose, onUpdated, onUp
       </div>
 
       <div className="detail-body">
-        {loading ? <div className="text-muted">Loading...</div> : (
+        {initialLoading ? <div className="text-muted">Loading...</div> : (
           <>
             {tab === 'entry' && (
               <EntryForm
                 entry={isNew ? null : data}
                 programs={programs}
                 creators={creators}
-                onSaved={(newEntry) => {
+                onSaved={() => {
                   if (isNew) onUpdated();
                   else { onUpdatedKeepOpen(); fetchDetail(); }
                 }}
@@ -303,50 +303,66 @@ function EntryForm({ entry, programs, creators, onSaved }) {
 // Reward Invoice Form — platform paying Patrick
 // ============================================================
 function RewardInvoiceForm({ entry, onUpdated }) {
-  const [invoice, setInvoice] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => { loadInvoice(); }, [entry?.entry_id]);
-
-  async function loadInvoice() {
-    setLoading(true);
-    const { data } = await supabase.from('invoices').select('*').eq('reward_entry_id', entry.entry_id).maybeSingle();
-    setInvoice(data);
-    setLoading(false);
-  }
-
+  const [invoice, setInvoice] = useState(undefined); // undefined = not yet loaded
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const [form, setForm] = useState(null);
-  useEffect(() => {
-    if (!loading) {
-      setForm({
-        invoice_number: invoice?.invoice_number || '',
-        invoice_date: invoice?.invoice_date || '',
-        invoice_amount: invoice?.invoice_amount ?? entry?.gross_amount ?? '',
-        payment_status: invoice?.payment_status || 'Not Invoiced',
-        payment_received_date: invoice?.payment_received_date || '',
-        payment_method: invoice?.payment_method || '',
-        payment_notes: invoice?.payment_notes || '',
-        you_received: invoice?.you_received ?? false,
-        you_received_date: invoice?.you_received_date || '',
-        amount_received: invoice?.amount_received ?? '',
-        processing_fee: invoice?.processing_fee ?? '',
-        you_received_notes: invoice?.you_received_notes || '',
-      });
-    }
-  }, [loading, invoice]);
-
   const [saving, setSaving] = useState(false);
   const [receiptPath, setReceiptPath] = useState(null);
   const [receiptName, setReceiptName] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  // Sync receipt state whenever invoice reloads
-  useEffect(() => {
-    if (!loading && invoice) {
-      setReceiptPath(invoice.receipt_path || null);
-      setReceiptName(invoice.receipt_name || null);
+  // Compute auto-fill defaults from entry
+  function getAutoFillDates() {
+    // Invoice date = last day of period month
+    let invoiceDate = '';
+    if (entry?.period_month) {
+      const [y, mo] = entry.period_month.slice(0, 7).split('-').map(Number);
+      const lastDay = new Date(y, mo, 0); // day 0 of next month = last day of this month
+      invoiceDate = `${y}-${String(mo).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
     }
-  }, [loading, invoice]);
+    // Paid date = payout_day of month following period month
+    let paidDate = '';
+    if (entry?.period_month && entry?.payout_day) {
+      const [y, mo] = entry.period_month.slice(0, 7).split('-').map(Number);
+      const nextMonth = mo === 12 ? 1 : mo + 1;
+      const nextYear = mo === 12 ? y + 1 : y;
+      const day = String(Math.min(entry.payout_day, 28)).padStart(2, '0');
+      paidDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${day}`;
+    }
+    return { invoiceDate, paidDate };
+  }
+
+  useEffect(() => {
+    loadAll();
+  }, [entry?.entry_id]);
+
+  async function loadAll() {
+    const [invRes, pmRes] = await Promise.all([
+      supabase.from('invoices').select('*').eq('reward_entry_id', entry.entry_id).maybeSingle(),
+      supabase.from('payment_methods').select('*').eq('is_active', true).order('sort_order').order('name'),
+    ]);
+    const inv = invRes.data;
+    setInvoice(inv);
+    setPaymentMethods(pmRes.data || []);
+    setReceiptPath(inv?.receipt_path || null);
+    setReceiptName(inv?.receipt_name || null);
+
+    const { invoiceDate, paidDate } = getAutoFillDates();
+    setForm({
+      invoice_number: inv?.invoice_number || '',
+      invoice_date: inv?.invoice_date || invoiceDate,
+      invoice_amount: inv?.invoice_amount ?? entry?.gross_amount ?? '',
+      payment_status: inv?.payment_status || 'Not Invoiced',
+      payment_received_date: inv?.payment_received_date || paidDate,
+      payment_method: inv?.payment_method || '',
+      payment_notes: inv?.payment_notes || '',
+      you_received: inv?.you_received ?? false,
+      you_received_date: inv?.you_received_date || '',
+      amount_received: inv?.amount_received ?? '',
+      processing_fee: inv?.processing_fee ?? '',
+      you_received_notes: inv?.you_received_notes || '',
+    });
+  }
 
   async function save() {
     if (!form) return;
@@ -367,23 +383,29 @@ function RewardInvoiceForm({ entry, onUpdated }) {
       reward_entry_id: entry.entry_id,
       campaign_id: null,
     };
+    let savedInvoice = invoice;
     if (invoice) {
       await supabase.from('invoices').update(payload).eq('id', invoice.id);
     } else {
-      await supabase.from('invoices').insert(payload);
+      const { data: newInv } = await supabase.from('invoices').insert(payload).select().single();
+      savedInvoice = newInv;
     }
+    // Update local invoice ref so receipt operations have the right id
+    setInvoice(savedInvoice);
     setSaving(false);
-    // Reload local invoice first so the form reflects saved values,
-    // then notify parent (which triggers its own fetchDetail).
-    await loadInvoice();
     onUpdated();
   }
 
   async function uploadReceipt(file) {
     let invId = invoice?.id;
     if (!invId) {
-      const { data: newInv } = await supabase.from('invoices').insert({ reward_entry_id: entry.entry_id, payment_status: form?.payment_status || 'Not Invoiced', campaign_id: null }).select().single();
+      const { data: newInv } = await supabase.from('invoices').insert({
+        reward_entry_id: entry.entry_id,
+        payment_status: form?.payment_status || 'Not Invoiced',
+        campaign_id: null,
+      }).select().single();
       invId = newInv?.id;
+      setInvoice(newInv);
     }
     if (!invId) return;
     setUploading(true);
@@ -392,21 +414,17 @@ function RewardInvoiceForm({ entry, onUpdated }) {
     const { error } = await supabase.storage.from('payment-receipts').upload(path, file, { upsert: true });
     if (!error) {
       await supabase.from('invoices').update({ receipt_path: path, receipt_name: file.name }).eq('id', invId);
-      setReceiptPath(path); setReceiptName(file.name);
+      setReceiptPath(path);
+      setReceiptName(file.name);
     }
     setUploading(false);
   }
 
-  if (loading || !form) return <div className="text-muted">Loading...</div>;
+  if (invoice === undefined || !form) return <div className="text-muted">Loading...</div>;
 
-  const program = entry;
-  const expectedPayoutDate = entry?.period_month && entry?.payout_day
-    ? (() => {
-        const d = new Date(entry.period_month + 'T12:00:00');
-        d.setMonth(d.getMonth() + 1);
-        d.setDate(entry.payout_day);
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      })()
+  const { invoiceDate, paidDate } = getAutoFillDates();
+  const expectedPayoutDate = paidDate
+    ? new Date(paidDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
   return (
@@ -446,7 +464,10 @@ function RewardInvoiceForm({ entry, onUpdated }) {
         </div>
         <div className="form-group">
           <label className="form-label">Payment Method</label>
-          <input className="form-input" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))} placeholder="Direct deposit, PayPal..." />
+          <select className="form-select" value={form.payment_method} onChange={e => setForm(f => ({ ...f, payment_method: e.target.value }))}>
+            <option value="">Select...</option>
+            {paymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+          </select>
         </div>
       </div>
       <div className="form-group">
