@@ -173,6 +173,7 @@ export default function CampaignsView() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [creatorFilter, setCreatorFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [detailTab, setDetailTab] = useState('deliverables');
@@ -238,6 +239,12 @@ export default function CampaignsView() {
   const platformOptions = [...new Set(campaigns.flatMap(c => c.campaign_deliverables?.map(d => d.platform?.name) || []).filter(Boolean))].sort();
   const paymentOptions = [...new Set(campaigns.map(c => c.invoices?.[0]?.payment_status).filter(Boolean))].sort();
 
+  // Derive months from campaign start dates
+  const months = [...new Set(campaigns.map(c => {
+    const d = c.campaign_start_date || c.created_at;
+    return d ? d.slice(0, 7) : null;
+  }).filter(Boolean))].sort().reverse();
+
   // Filter + sort pipeline
   let displayCampaigns = campaigns.filter(c => {
     if (filter !== 'all' && c.status !== filter) return false;
@@ -247,6 +254,10 @@ export default function CampaignsView() {
     if (colFilters.payment) {
       const ps = c.invoices?.[0]?.payment_status || 'Not Invoiced';
       if (ps !== colFilters.payment) return false;
+    }
+    if (monthFilter !== 'all') {
+      const d = c.campaign_start_date || c.created_at || '';
+      if (!d.startsWith(monthFilter)) return false;
     }
     return true;
   });
@@ -348,6 +359,12 @@ export default function CampaignsView() {
             onClick={() => setColFilters({ agency: '', platform: '', payment: '' })}>
             Clear column filters ✕
           </button>
+        )}
+        {months.length > 0 && (
+          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
+            <option value="all">All months</option>
+            {months.map(m => <option key={m} value={m}>{new Date(m + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>)}
+          </select>
         )}
       </div>
 
