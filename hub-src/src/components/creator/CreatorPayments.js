@@ -43,7 +43,7 @@ export default function CreatorPayments() {
     if (payoutIds.length > 0) {
       const { data: splits } = await supabase
         .from('payout_splits')
-        .select('*, destination:payment_destinations(name, account_type, account_last4, institution)')
+        .select('*, destination:payment_destinations(name, account_type, account_last4, institution, memo)')
         .in('payout_id', payoutIds);
       (splits || []).forEach(s => {
         if (!splitsByPayoutId[s.payout_id]) splitsByPayoutId[s.payout_id] = [];
@@ -70,6 +70,7 @@ export default function CreatorPayments() {
   const totalPaidToMe      = filtered.filter(r => !isInKind(r.payment_method) && r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
   const totalAgencyPending = filtered.filter(r => !isInKind(r.payment_method) && ['Not Invoiced', 'Invoiced', 'Pending'].includes(r.agency_payment_status)).reduce((s, r) => s + (r.contracted_rate || 0), 0);
   const totalPayoutPending = filtered.filter(r => !isInKind(r.payment_method) && r.payout_status !== 'Paid' && r.payout_status !== 'N/A').reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
+  const totalFees          = filtered.filter(r => !isInKind(r.payment_method)).reduce((s, r) => s + (r.processing_fee || 0), 0);
   const totalInKind        = filtered.filter(r => isInKind(r.payment_method)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -92,15 +93,14 @@ export default function CreatorPayments() {
       </div>
 
       {/* Stats */}
-      <div className="stats-row" style={{ gridTemplateColumns: `repeat(${totalInKind > 0 ? 6 : 5}, 1fr)` }}>
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Total Contracted</div></div>
         <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(totalAgencyPaid)}</div><div className="stat-label">Agency Paid</div></div>
         <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(totalPaidToMe)}</div><div className="stat-label">Paid to Me</div></div>
         <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(totalAgencyPending)}</div><div className="stat-label">Agency Pending</div></div>
         <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(totalPayoutPending)}</div><div className="stat-label">My Payout Pending</div></div>
-        {totalInKind > 0 && (
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
-        )}
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: totalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(totalFees)}</div><div className="stat-label">Fees Paid</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
       </div>
 
       {/* Payout filter */}
@@ -112,92 +112,122 @@ export default function CreatorPayments() {
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {filtered.filter(r => !isInKind(r.payment_method)).length === 0 && filtered.filter(r => isInKind(r.payment_method)).length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon">◇</div>
           <div className="empty-state-title">No payments to show</div>
           <div className="empty-state-text">Payments will appear here once your manager sets them up</div>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Campaign</th>
-                <th>Contracted</th>
-                <th>Agency Paid</th>
-                <th>Destination</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Sent</th>
-                <th>Cleared</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => {
-                const splits = splitsByPayoutId[r.payout_id] || [];
-                const inKind = isInKind(r.payment_method);
+        <>
+          {/* Cash payments table */}
+          {filtered.filter(r => !isInKind(r.payment_method)).length > 0 && (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Contracted</th>
+                    <th>Agency Paid</th>
+                    <th>Destination</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Sent</th>
+                    <th>Cleared</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.filter(r => !isInKind(r.payment_method)).map(r => {
+                    const splits = splitsByPayoutId[r.payout_id] || [];
 
-                if (inKind) {
-                  return (
-                    <tr key={r.campaign_id} onClick={() => setSelected(r)}>
-                      <td><div style={{ fontWeight: 500 }}>{r.campaign_name}</div><div className="text-muted text-xs">{r.brand_name} · {r.agency_name || '—'}</div></td>
-                      <td style={{ fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
-                      <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
-                      <td colSpan={5}><span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>In-Kind — no cash payout</span></td>
-                    </tr>
-                  );
-                }
+                    if (splits.length === 0) {
+                      return (
+                        <tr key={r.campaign_id} onClick={() => setSelected(r)}>
+                          <td><div style={{ fontWeight: 500 }}>{r.campaign_name}</div><div className="text-muted text-xs">{r.brand_name} · {r.agency_name || '—'}</div></td>
+                          <td style={{ fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
+                          <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
+                          <td className="text-muted text-xs">—</td>
+                          <td>{r.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(r.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
+                          <td><PayoutBadge status={r.payout_status || 'Pending'} /></td>
+                          <td className="text-muted">—</td>
+                          <td className="text-muted">—</td>
+                        </tr>
+                      );
+                    }
 
-                if (splits.length === 0) {
-                  return (
-                    <tr key={r.campaign_id} onClick={() => setSelected(r)}>
-                      <td><div style={{ fontWeight: 500 }}>{r.campaign_name}</div><div className="text-muted text-xs">{r.brand_name} · {r.agency_name || '—'}</div></td>
-                      <td style={{ fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
-                      <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
-                      <td className="text-muted text-xs">—</td>
-                      <td>{r.payout_amount != null ? <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(r.payout_amount)}</span> : <span className="text-muted">—</span>}</td>
-                      <td><PayoutBadge status={r.payout_status || 'Pending'} /></td>
-                      <td className="text-muted">—</td>
-                      <td className="text-muted">—</td>
-                    </tr>
-                  );
-                }
-
-                return splits.map((s, i) => {
-                  const dest = s.destination;
-                  const statusColor = s.split_status === 'Cleared' ? 'var(--green)' : s.split_status === 'Sent' ? 'var(--accent)' : s.split_status === 'Failed' ? 'var(--red)' : 'var(--text-muted)';
-                  return (
-                    <tr key={`${r.campaign_id}-${s.id}`} onClick={() => setSelected(r)} style={{ cursor: 'pointer' }}>
-                      {i === 0 ? (
-                        <>
-                          <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>
-                            <div style={{ fontWeight: 500 }}>{r.campaign_name}</div>
-                            <div className="text-muted text-xs">{r.brand_name} · {r.agency_name || '—'}</div>
+                    return splits.map((s, i) => {
+                      const dest = s.destination;
+                      const statusColor = s.split_status === 'Cleared' ? 'var(--green)' : s.split_status === 'Sent' ? 'var(--accent)' : s.split_status === 'Failed' ? 'var(--red)' : 'var(--text-muted)';
+                      return (
+                        <tr key={`${r.campaign_id}-${s.id}`} onClick={() => setSelected(r)} style={{ cursor: 'pointer' }}>
+                          {i === 0 ? (
+                            <>
+                              <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}>
+                                <div style={{ fontWeight: 500 }}>{r.campaign_name}</div>
+                                <div className="text-muted text-xs">{r.brand_name} · {r.agency_name || '—'}</div>
+                              </td>
+                              <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
+                              <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
+                            </>
+                          ) : null}
+                          <td>
+                            <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
+                            <div className="text-muted" style={{ fontSize: 10 }}>
+                              {dest?.account_type === 'Other'
+                                ? dest?.memo ? dest.memo.slice(0, 40) + (dest.memo.length > 40 ? '…' : '') : 'Other'
+                                : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`}
+                            </div>
                           </td>
-                          <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14, fontWeight: 600 }}>{fmtMoney(r.contracted_rate)}</td>
-                          <td rowSpan={splits.length} style={{ verticalAlign: 'top', paddingTop: 14 }}><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
-                        </>
-                      ) : null}
-                      <td>
-                        <div style={{ fontWeight: 500, fontSize: 12 }}>{dest?.name || 'Unknown'}</div>
-                        <div className="text-muted" style={{ fontSize: 10 }}>
-                          {dest?.account_type}{dest?.account_last4 ? ` ···${dest.account_last4}` : ''}{dest?.institution ? ` · ${dest.institution}` : ''}
-                        </div>
-                      </td>
-                      <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(s.amount)}</td>
-                      <td><span style={{ fontSize: 11, fontWeight: 600, color: statusColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.split_status}</span></td>
-                      <td style={{ fontSize: 12 }}>{s.sent_date ? fmtDate(s.sent_date) : <span className="text-muted">—</span>}</td>
-                      <td style={{ fontSize: 12, color: s.cleared_date ? 'var(--green)' : 'var(--text-muted)' }}>
-                        {s.cleared_date ? `✓ ${fmtDate(s.cleared_date)}` : '—'}
-                      </td>
+                          <td style={{ color: 'var(--accent)', fontWeight: 700 }}>{fmtMoney(s.amount)}</td>
+                          <td><span style={{ fontSize: 11, fontWeight: 600, color: statusColor, textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.split_status}</span></td>
+                          <td style={{ fontSize: 12 }}>{s.sent_date ? fmtDate(s.sent_date) : <span className="text-muted">—</span>}</td>
+                          <td style={{ fontSize: 12, color: s.cleared_date ? 'var(--green)' : 'var(--text-muted)' }}>
+                            {s.cleared_date ? `✓ ${fmtDate(s.cleared_date)}` : '—'}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* In-kind table */}
+          {filtered.filter(r => isInKind(r.payment_method)).length > 0 && (
+            <div style={{ marginTop: 24 }}>
+              <div style={{ fontSize: 9, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 2, color: 'var(--text-dim)', marginBottom: 10 }}>
+                IN-KIND COMPENSATION
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Campaign</th>
+                      <th>Brand</th>
+                      <th>Agency</th>
+                      <th>Fair Value</th>
+                      <th>Agency Status</th>
+                      <th>Notes</th>
                     </tr>
-                  );
-                });
-              })}
-            </tbody>
-          </table>
-        </div>
+                  </thead>
+                  <tbody>
+                    {filtered.filter(r => isInKind(r.payment_method)).map(r => (
+                      <tr key={r.campaign_id} onClick={() => setSelected(r)} style={{ cursor: 'pointer' }}>
+                        <td><div style={{ fontWeight: 500 }}>{r.campaign_name}</div></td>
+                        <td>{r.brand_name}</td>
+                        <td>{r.agency_name || <span className="text-muted">—</span>}</td>
+                        <td style={{ fontWeight: 600 }}>{fmtMoney(r.invoice_amount ?? r.contracted_rate)}</td>
+                        <td><Badge status={r.agency_payment_status || 'Not Invoiced'} /></td>
+                        <td><span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>No cash payout</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {selected && (
@@ -227,7 +257,7 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
     const [payoutRes, invRes] = await Promise.all([
       supabase
         .from('creator_payouts')
-        .select('*, payout_splits(*, destination:payment_destinations(name, account_type, account_last4, institution))')
+        .select('*, payout_splits(*, destination:payment_destinations(name, account_type, account_last4, institution, memo))')
         .eq('campaign_id', row.campaign_id)
         .maybeSingle(),
       supabase.from('invoices').select('payment_status, invoice_date, invoice_amount, amount_received, processing_fee, you_received, you_received_date, payment_method').eq('campaign_id', row.campaign_id).maybeSingle(),
@@ -360,9 +390,9 @@ function CreatorPaymentDetail({ row, profileId, onClose }) {
                                 {dest?.name || 'Unknown destination'}
                               </div>
                               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                                {dest?.account_type}
-                                {dest?.account_last4 ? ` ···${dest.account_last4}` : ''}
-                                {dest?.institution ? ` · ${dest.institution}` : ''}
+                                {dest?.account_type === 'Other'
+                                  ? dest?.memo ? dest.memo.slice(0, 50) + (dest.memo.length > 50 ? '…' : '') : 'Other'
+                                  : `${dest?.account_type || ''}${dest?.account_last4 ? ` ···${dest.account_last4}` : ''}${dest?.institution ? ` · ${dest.institution}` : ''}`}
                               </div>
                             </div>
                             <SplitStatusBadge status={s.split_status} />

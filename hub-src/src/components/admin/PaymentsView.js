@@ -91,6 +91,7 @@ export default function PaymentsView() {
   const totalReceived = filtered.filter(r => r.you_received && !isInKind(r.payment_method)).reduce((s, r) => s + (r.amount_received || r.invoice_amount || 0), 0);
   const totalPaidOut = filtered.filter(r => r.payout_status === 'Paid' && !isInKind(r.payment_method)).reduce((s, r) => s + (r.payout_amount || 0), 0);
   const totalPendingPayout = filtered.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && !isInKind(r.payment_method) && r.you_received).reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
+  const totalFees = filtered.filter(r => !isInKind(r.payment_method)).reduce((s, r) => s + (r.processing_fee || 0), 0);
   const totalInKind = filtered.filter(r => isInKind(r.payment_method)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -114,14 +115,13 @@ export default function PaymentsView() {
         </div>
       </div>
 
-      <div className="stats-row" style={{ gridTemplateColumns: `repeat(${totalInKind > 0 ? 5 : 4}, 1fr)` }}>
+      <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
         <div className="stat-card"><div className="stat-value" style={{ fontSize: 22 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Contracted</div></div>
         <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 22 }}>{fmtMoney(totalReceived)}</div><div className="stat-label">You Received</div></div>
         <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 22 }}>{fmtMoney(totalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
         <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 22 }}>{fmtMoney(totalPendingPayout)}</div><div className="stat-label">Awaiting Payout</div></div>
-        {totalInKind > 0 && (
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 22, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
-        )}
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 22, color: totalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(totalFees)}</div><div className="stat-label">Fees Paid</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ fontSize: 22, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
       </div>
 
       <div className="filters-row" style={{ flexWrap: 'wrap' }}>
