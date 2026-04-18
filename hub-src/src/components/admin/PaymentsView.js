@@ -57,7 +57,11 @@ export default function PaymentsView() {
     setLoading(false);
   }
 
-  const months = [...new Set(rows.filter(r => r.invoice_date).map(r => r.invoice_date.slice(0, 7)))].sort().reverse();
+  const months = [...new Set(
+    rows
+      .filter(r => r.invoice_date && /^\d{4}-\d{2}/.test(r.invoice_date))
+      .map(r => r.invoice_date.slice(0, 7))
+  )].sort().reverse();
 
   const filtered = rows.filter(r => {
     if (agencyFilter !== 'all' && r.agency_payment_status !== agencyFilter) return false;
@@ -667,3 +671,4 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
     </div>
   );
 }
+
