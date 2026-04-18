@@ -10,6 +10,11 @@ const SPLIT_STATUSES = ['Pending', 'Sent', 'Cleared', 'Failed'];
 const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
 const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
 
+async function getSignedUrl(bucket, path) {
+  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
+  return data?.signedUrl || null;
+}
+
 function PayoutBadge({ status }) {
   const map = { 'Pending': 'badge-not-invoiced', 'Partial': 'badge-pending', 'Paid': 'badge-paid', 'On Hold': 'badge-overdue' };
   return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status || 'Pending'}</span>;
@@ -227,6 +232,9 @@ function InvoiceForm({ invoice, row, onUpdated }) {
     processing_fee: invoice?.processing_fee ?? '',
   });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [receiptPath, setReceiptPath] = useState(invoice?.receipt_path || null);
+  const [receiptName, setReceiptName] = useState(invoice?.receipt_name || null);
 
   const delta = form.amount_received !== '' && form.invoice_amount !== ''
     ? parseFloat(form.amount_received) - parseFloat(form.invoice_amount) : null;
@@ -253,6 +261,52 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       await supabase.from('invoices').insert({ ...payload, campaign_id: row.campaign_id });
     }
     setSaving(false);
+    onUpdated();
+  }
+
+  async function uploadReceipt(file) {
+    if (!file) return;
+    let invoiceId = invoice?.id;
+    if (!invoiceId) {
+      const { data: newInv } = await supabase.from('invoices').insert({
+        campaign_id: row.campaign_id,
+        payment_status: form.payment_status || 'Not Invoiced',
+      }).select().single();
+      invoiceId = newInv?.id;
+      if (!invoiceId) return;
+    }
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const path = `receipts/${invoiceId}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('payment-receipts').upload(path, file, { upsert: true });
+    if (!error) {
+      await supabase.from('invoices').update({ receipt_path: path, receipt_name: file.name }).eq('id', invoiceId);
+      setReceiptPath(path);
+      setReceiptName(file.name);
+      onUpdated();
+    }
+    setUploading(false);
+  }
+
+  async function viewReceipt() {
+    const url = await getSignedUrl('payment-receipts', receiptPath);
+    if (url) window.open(url, '_blank');
+  }
+
+  async function downloadReceipt() {
+    const url = await getSignedUrl('payment-receipts', receiptPath);
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url; a.download = receiptName || 'receipt';
+    a.click();
+  }
+
+  async function deleteReceipt() {
+    if (!window.confirm('Remove this receipt?')) return;
+    await supabase.storage.from('payment-receipts').remove([receiptPath]);
+    await supabase.from('invoices').update({ receipt_path: null, receipt_name: null }).eq('id', invoice.id);
+    setReceiptPath(null);
+    setReceiptName(null);
     onUpdated();
   }
 
@@ -349,6 +403,26 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       <button className="btn btn-primary w-full mt-12" onClick={save} disabled={saving} style={{ justifyContent: 'center' }}>
         {saving ? 'Saving...' : 'Save Invoice'}
       </button>
+
+      {/* Receipt */}
+      <div className="divider" style={{ margin: '20px 0 14px' }} />
+      <div className="detail-section-title" style={{ marginBottom: 10 }}>PAYMENT RECEIPT</div>
+      {receiptPath ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6 }}>
+          <span style={{ fontSize: 20 }}>📋</span>
+          <span style={{ fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{receiptName || 'Receipt'}</span>
+          <button className="btn btn-secondary btn-sm" onClick={viewReceipt}>View</button>
+          <button className="btn btn-secondary btn-sm" onClick={downloadReceipt}>↓ Download</button>
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red, #e74c3c)' }} onClick={deleteReceipt}>✕</button>
+        </div>
+      ) : (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 6, cursor: 'pointer' }}>
+          <span style={{ fontSize: 20 }}>📎</span>
+          <span className="text-muted text-sm">{uploading ? 'Uploading...' : 'Click to upload receipt (PDF, JPG, PNG)'}</span>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }} disabled={uploading}
+            onChange={e => { if (e.target.files[0]) uploadReceipt(e.target.files[0]); }} />
+        </label>
+      )}
     </div>
   );
 }
