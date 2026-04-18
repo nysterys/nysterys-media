@@ -26,7 +26,7 @@ export default function CampaignsView() {
     const [c, a, cr, p, dt] = await Promise.all([
       supabase.from('campaigns').select(`
         *, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
-        campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name),
+        campaign_deliverables:campaign_deliverables_with_stats(*, platform:platforms(name), deliverable_type:deliverable_types(name),
           revision_rounds(* , submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name))),
         invoices(*)
       `).order('created_at', { ascending: false }),
@@ -190,7 +190,7 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
     campaign_name: '', brand_name: '', agency_id: '', creator_profile_id: '',
     contracted_rate: '', is_rush: false, rush_premium: '',
     deal_signed_date: '', campaign_start_date: '', campaign_end_date: '',
-    exclusivity_start: '', exclusivity_end: '', usage_rights_notes: '',
+    usage_rights_notes: '',
     brief: '', admin_notes: '', status: 'Negotiating',
   });
   const [deliverables, setDeliverables] = useState([]);
@@ -320,17 +320,6 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Exclusivity Start</label>
-              <input className="form-input" type="date" value={form.exclusivity_start} onChange={e => setF('exclusivity_start', e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Exclusivity End</label>
-              <input className="form-input" type="date" value={form.exclusivity_end} onChange={e => setF('exclusivity_end', e.target.value)} />
-            </div>
-          </div>
-
           <div className="form-group">
             <label className="checkbox-row">
               <input type="checkbox" checked={form.is_rush} onChange={e => setF('is_rush', e.target.checked)} />
@@ -431,6 +420,15 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
 
   async function updateCampaignStatus(status) {
+    if (status === 'Completed') {
+      const deliverables = c.campaign_deliverables || [];
+      const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
+      if (!allPosted) {
+        alert(`Cannot mark as Completed — ${deliverables.filter(d => d.draft_status !== 'Posted').length} deliverable(s) are not yet Posted.`);
+        setEditingStatus(false);
+        return;
+      }
+    }
     await supabase.from('campaigns').update({ status }).eq('id', c.id);
     setEditingStatus(false);
     onUpdated();
@@ -495,7 +493,6 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
                 <div><div className="detail-item-label">Rush Premium</div><div className="detail-item-value">{c.is_rush ? fmtMoney(c.rush_premium) : '—'}</div></div>
                 <div><div className="detail-item-label">Deal Signed</div><div className="detail-item-value">{fmtDate(c.deal_signed_date)}</div></div>
                 <div><div className="detail-item-label">Campaign Period</div><div className="detail-item-value">{fmtDate(c.campaign_start_date)} → {fmtDate(c.campaign_end_date)}</div></div>
-                <div><div className="detail-item-label">Exclusivity</div><div className="detail-item-value">{fmtDate(c.exclusivity_start)} → {fmtDate(c.exclusivity_end)}</div></div>
               </div>
             </div>
             {c.brief && (
@@ -549,23 +546,36 @@ function CampaignDetail({ campaign, agencies, creators, platforms, deliverableTy
   );
 }
 
+const DELIVERABLE_STATUSES = ['Not Started', 'Draft Submitted', 'Revisions Requested', 'Approved', 'Posted'];
+
 function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
   const [showAddDeliverable, setShowAddDeliverable] = useState(false);
   const [showAddRevision, setShowAddRevision] = useState(null);
   const [showMarkPosted, setShowMarkPosted] = useState(null);
+  const [editingDeliverable, setEditingDeliverable] = useState(null);
 
   const fmtDate = (d) => d ? format(parseISO(d), 'MMM d, yyyy') : '—';
+
+  const deliverables = campaign.campaign_deliverables || [];
+  const allPosted = deliverables.length > 0 && deliverables.every(d => d.draft_status === 'Posted');
+  const postedCount = deliverables.filter(d => d.draft_status === 'Posted').length;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-12">
         <div style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>
-          {campaign.campaign_deliverables?.length || 0} Platform(s)
+          {postedCount}/{deliverables.length} Posted
+          {deliverables.length > 0 && !allPosted && (
+            <span style={{ color: 'var(--orange)', marginLeft: 8 }}>· Campaign cannot be Completed until all are posted</span>
+          )}
+          {allPosted && deliverables.length > 0 && (
+            <span style={{ color: 'var(--green)', marginLeft: 8 }}>· All posted ✓</span>
+          )}
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowAddDeliverable(true)}>+ Add Platform</button>
       </div>
 
-      {(!campaign.campaign_deliverables || campaign.campaign_deliverables.length === 0) && (
+      {deliverables.length === 0 && (
         <div className="empty-state">
           <div className="empty-state-icon">◻</div>
           <div className="empty-state-title">No platforms yet</div>
@@ -573,7 +583,7 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
         </div>
       )}
 
-      {campaign.campaign_deliverables?.map(d => (
+      {deliverables.map(d => (
         <div key={d.id} className="deliverable-card">
           <div className="deliverable-card-header">
             <div>
@@ -581,11 +591,43 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
               {d.deliverable_type && <span className="text-muted text-sm" style={{ marginLeft: 8 }}>· {d.deliverable_type.name}</span>}
               {d.quantity > 1 && <span className="text-muted text-sm"> × {d.quantity}</span>}
             </div>
-            <Badge status={d.draft_status} />
+            <div className="flex items-center gap-8">
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => setEditingDeliverable(d)}
+              >Edit</button>
+              <Badge status={d.draft_status} />
+            </div>
           </div>
 
           {d.deliverable_details && (
             <div className="text-muted text-sm mb-8">{d.deliverable_details}</div>
+          )}
+
+          {/* TikTok video preview — shows once post_url is set and data is synced */}
+          {d.cover_image_url && (
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
+              <a href={d.post_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                style={{ flexShrink: 0, display: 'block', width: 72, height: 96, borderRadius: 6, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                <img src={d.cover_image_url} alt="video thumbnail"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </a>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {d.video_title && (
+                  <div style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.4, marginBottom: 4, color: 'var(--text)', wordBreak: 'break-word' }}>
+                    {d.video_title}
+                  </div>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {d.views != null && <span>👁 {Number(d.views).toLocaleString()}</span>}
+                  {d.likes != null && <span>♥ {Number(d.likes).toLocaleString()}</span>}
+                  {d.comments != null && <span>💬 {Number(d.comments).toLocaleString()}</span>}
+                  {d.shares != null && <span>↗ {Number(d.shares).toLocaleString()}</span>}
+                  {d.engagement_rate != null && <span style={{ color: 'var(--orange)' }}>{d.engagement_rate}% ER</span>}
+                </div>
+              </div>
+            </div>
           )}
 
           <div className="flex gap-16 mb-12" style={{ fontSize: 12 }}>
@@ -665,6 +707,114 @@ function DeliverableTab({ campaign, platforms, deliverableTypes, onUpdated }) {
           onSaved={() => { setShowMarkPosted(null); onUpdated(); }}
         />
       )}
+
+      {editingDeliverable && (
+        <EditDeliverableModal
+          deliverable={editingDeliverable}
+          platforms={platforms}
+          deliverableTypes={deliverableTypes}
+          onClose={() => setEditingDeliverable(null)}
+          onSaved={() => { setEditingDeliverable(null); onUpdated(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditDeliverableModal({ deliverable, platforms, deliverableTypes, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    platform_id: deliverable.platform_id || '',
+    deliverable_type_id: deliverable.deliverable_type_id || '',
+    deliverable_details: deliverable.deliverable_details || '',
+    quantity: deliverable.quantity || 1,
+    contracted_post_date: deliverable.contracted_post_date || '',
+    actual_post_date: deliverable.actual_post_date || '',
+    post_url: deliverable.post_url || '',
+    draft_status: deliverable.draft_status || 'Not Started',
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    const update = {
+      platform_id: form.platform_id || null,
+      deliverable_type_id: form.deliverable_type_id || null,
+      deliverable_details: form.deliverable_details || null,
+      quantity: parseInt(form.quantity) || 1,
+      contracted_post_date: form.contracted_post_date || null,
+      actual_post_date: form.actual_post_date || null,
+      post_url: form.post_url || null,
+      draft_status: form.draft_status,
+    };
+    // If marking posted and no posted_at yet, set it
+    if (form.draft_status === 'Posted' && !deliverable.posted_at) {
+      update.posted_at = new Date().toISOString();
+    }
+    await supabase.from('campaign_deliverables').update(update).eq('id', deliverable.id);
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 520 }}>
+        <div className="modal-header">
+          <div className="modal-title" style={{ fontSize: 18 }}>EDIT DELIVERABLE</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Platform</label>
+              <select className="form-select" value={form.platform_id} onChange={e => setForm(f => ({ ...f, platform_id: e.target.value }))}>
+                <option value="">Select...</option>
+                {platforms.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select className="form-select" value={form.deliverable_type_id} onChange={e => setForm(f => ({ ...f, deliverable_type_id: e.target.value }))}>
+                <option value="">Select...</option>
+                {deliverableTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Quantity</label>
+              <input className="form-input" type="number" min={1} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <select className="form-select" value={form.draft_status} onChange={e => setForm(f => ({ ...f, draft_status: e.target.value }))}>
+                {DELIVERABLE_STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Details / Instructions</label>
+            <input className="form-input" value={form.deliverable_details} onChange={e => setForm(f => ({ ...f, deliverable_details: e.target.value }))} placeholder="Specific instructions for this deliverable..." />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Contracted Post Date</label>
+              <input className="form-input" type="date" value={form.contracted_post_date} onChange={e => setForm(f => ({ ...f, contracted_post_date: e.target.value }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Actual Post Date</label>
+              <input className="form-input" type="date" value={form.actual_post_date} onChange={e => setForm(f => ({ ...f, actual_post_date: e.target.value }))} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Post URL</label>
+            <input className="form-input" value={form.post_url} onChange={e => setForm(f => ({ ...f, post_url: e.target.value }))} placeholder="https://www.tiktok.com/..." />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+        </div>
+      </div>
     </div>
   );
 }

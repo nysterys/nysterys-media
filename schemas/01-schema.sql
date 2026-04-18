@@ -98,9 +98,7 @@ create table public.campaigns (
   campaign_start_date date,
   campaign_end_date date,
   
-  -- Exclusivity & rights
-  exclusivity_start date,
-  exclusivity_end date,
+  -- Rights
   usage_rights_notes text,
   
   -- Status

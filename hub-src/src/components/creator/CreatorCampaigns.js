@@ -181,12 +181,6 @@ function CreatorCampaignDetail({ campaign, tab, setTab, onClose, onUpdated }) {
               <div className="detail-grid">
                 <div><div className="detail-item-label">Start Date</div><div className="detail-item-value">{fmtDate(c.campaign_start_date)}</div></div>
                 <div><div className="detail-item-label">End Date</div><div className="detail-item-value">{fmtDate(c.campaign_end_date)}</div></div>
-                {c.exclusivity_start && (
-                  <div style={{ gridColumn: 'span 2' }}>
-                    <div className="detail-item-label">Exclusivity Window</div>
-                    <div className="detail-item-value">{fmtDate(c.exclusivity_start)} → {fmtDate(c.exclusivity_end)}</div>
-                  </div>
-                )}
                 {c.usage_rights_notes && (
                   <div style={{ gridColumn: 'span 2' }}>
                     <div className="detail-item-label">Usage Rights</div>
