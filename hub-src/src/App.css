@@ -262,3 +262,16 @@ code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; backgrou
 ::-webkit-scrollbar-track { background: var(--black); }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* Markdown preview */
+.markdown-preview h1 { font-family: var(--font-display); font-size: 20px; letter-spacing: 1px; margin: 12px 0 6px; color: var(--white); }
+.markdown-preview h2 { font-family: var(--font-display); font-size: 16px; letter-spacing: 1px; margin: 10px 0 4px; color: var(--white); }
+.markdown-preview h3 { font-size: 13px; font-weight: 700; margin: 8px 0 4px; color: var(--white); text-transform: uppercase; letter-spacing: 0.5px; }
+.markdown-preview p { margin: 0 0 10px; }
+.markdown-preview ul { padding-left: 18px; margin: 0 0 10px; }
+.markdown-preview li { margin-bottom: 3px; }
+.markdown-preview strong { color: var(--white); font-weight: 700; }
+.markdown-preview em { font-style: italic; color: var(--orange2); }
+.markdown-preview a { color: var(--blue); text-decoration: underline; }
+.markdown-preview code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 3px; color: var(--orange2); }
+.markdown-preview hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }

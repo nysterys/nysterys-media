@@ -15,6 +15,154 @@ function openPopup(url) {
   window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
 }
 
+// Lightweight markdown → HTML (no external dependency)
+function renderMarkdown(md) {
+  if (!md) return '';
+  let html = md
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold + italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    // Links
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    // Unordered lists
+    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
+    // Ordered lists
+    .replace(/^\s*\d+\. (.+)$/gm, '<li>$1</li>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr/>')
+    // Paragraphs: double newline → paragraph break
+    .replace(/\n\n/g, '</p><p>')
+    // Single newline → <br>
+    .replace(/\n/g, '<br/>');
+  // Wrap in paragraph
+  html = '<p>' + html + '</p>';
+  // Clean up empty paragraphs and wrap <li> in <ul>
+  html = html.replace(/<p>(<li>.*?<\/li>(<br\/>)?)+<\/p>/gs, m =>
+    '<ul>' + m.replace(/<p>|<\/p>|<br\/>/g, '') + '</ul>'
+  );
+  return html;
+}
+
+// Full-screen markdown editor modal
+function MarkdownEditorModal({ value, onChange, onClose }) {
+  const [draft, setDraft] = useState(value);
+  const [preview, setPreview] = useState(false);
+
+  function save() { onChange(draft); onClose(); }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 2000,
+      background: 'rgba(0,0,0,0.85)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 1100, height: '90vh',
+        background: 'var(--surface)', borderRadius: 10,
+        border: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, letterSpacing: 1 }}>BRIEF / INSTRUCTIONS</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setPreview(p => !p)}>
+              {preview ? 'Edit' : 'Preview'}
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Editor */}
+          <textarea
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            style={{
+              flex: preview ? '0 0 50%' : 1,
+              resize: 'none', border: 'none', outline: 'none',
+              background: '#0d0d0d', color: 'var(--text)',
+              fontFamily: 'monospace', fontSize: 13, lineHeight: 1.7,
+              padding: 20, borderRight: preview ? '1px solid var(--border)' : 'none',
+            }}
+            placeholder="Write the campaign brief in Markdown...&#10;&#10;Use **bold**, *italic*, # headers, - lists, [links](url)"
+          />
+          {/* Preview */}
+          {preview && (
+            <div
+              style={{ flex: '0 0 50%', padding: 20, overflowY: 'auto', fontSize: 13, lineHeight: 1.7 }}
+              className="markdown-preview"
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(draft) || '<p style="color:var(--text-muted)">Nothing to preview yet.</p>' }}
+            />
+          )}
+        </div>
+
+        {/* Footer hint */}
+        <div style={{ padding: '8px 20px', borderTop: '1px solid var(--border)', fontSize: 11, color: 'var(--text-muted)' }}>
+          Markdown supported: **bold** · *italic* · # Heading · - list item · [link](url) · `code`
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Brief field with expand button + inline markdown preview
+function BriefField({ value, onChange, placeholder }) {
+  const [showEditor, setShowEditor] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <label className="form-label" style={{ marginBottom: 0 }}>Brief / Instructions</label>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {value && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={() => setShowPreview(p => !p)}>
+              {showPreview ? 'Hide preview' : 'Preview'}
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary btn-sm" style={{ fontSize: 11, padding: '2px 10px' }}
+            onClick={() => setShowEditor(true)}>
+            ⤢ Expand
+          </button>
+        </div>
+      </div>
+      <textarea
+        className="form-textarea"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder || 'Campaign brief, talking points, requirements... (Markdown supported)'}
+        style={{ minHeight: 80, fontFamily: 'monospace', fontSize: 12 }}
+      />
+      {showPreview && value && (
+        <div
+          className="markdown-preview"
+          style={{ marginTop: 8, padding: '12px 14px', background: '#0d0d0d', borderRadius: 6, border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.7 }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }}
+        />
+      )}
+      {showEditor && (
+        <MarkdownEditorModal
+          value={value}
+          onChange={onChange}
+          onClose={() => setShowEditor(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function CampaignsView() {
   const [campaigns, setCampaigns] = useState([]);
   const [agencies, setAgencies] = useState([]);
@@ -480,8 +628,7 @@ function CampaignModal({ agencies, creators, platforms, deliverableTypes, onClos
           )}
 
           <div className="form-group">
-            <label className="form-label">Brief / Instructions</label>
-            <textarea className="form-textarea" value={form.brief} onChange={e => setF('brief', e.target.value)} placeholder="Campaign brief, talking points, requirements..." />
+            <BriefField value={form.brief} onChange={v => setF('brief', v)} />
           </div>
 
           <div className="form-group">
@@ -812,8 +959,7 @@ function DetailsTab({ campaign, agencies, creators, onUpdated }) {
       )}
 
       <div className="form-group">
-        <label className="form-label">Brief / Instructions</label>
-        <textarea className="form-textarea" value={form.brief} onChange={e => setF('brief', e.target.value)} placeholder="Campaign brief, talking points, requirements..." />
+        <BriefField value={form.brief} onChange={v => setF('brief', v)} />
       </div>
 
       <div className="form-group">
@@ -969,8 +1115,7 @@ function EditCampaignModal({ campaign, agencies, creators, onClose, onSaved }) {
           )}
 
           <div className="form-group">
-            <label className="form-label">Brief / Instructions</label>
-            <textarea className="form-textarea" value={form.brief} onChange={e => setF('brief', e.target.value)} placeholder="Campaign brief, talking points, requirements..." />
+            <BriefField value={form.brief} onChange={v => setF('brief', v)} />
           </div>
 
           <div className="form-group">
