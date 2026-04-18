@@ -42,15 +42,23 @@ export default function Comments({ campaignId }) {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   }
 
+  async function deleteComment(id) {
+    if (!window.confirm('Delete this comment?')) return;
+    await supabase.from('comments').delete().eq('id', id);
+    await fetchComments();
+  }
+
+  const isAdmin = profile?.role === 'admin';
+
   return (
     <div>
       {comments.length === 0 && (
         <div className="text-muted text-sm" style={{ marginBottom: 12 }}>No comments yet.</div>
       )}
       {comments.map(c => (
-        <div className="comment" key={c.id}>
+        <div className="comment" key={c.id} style={{ position: 'relative' }}>
           <div className="comment-avatar">{getInitials(c.author)}</div>
-          <div className="comment-body">
+          <div className="comment-body" style={{ flex: 1 }}>
             <div className="comment-meta">
               <strong>{c.author?.full_name || 'Unknown'}</strong>
               {' · '}
@@ -58,6 +66,14 @@ export default function Comments({ campaignId }) {
             </div>
             <div className="comment-text">{c.body}</div>
           </div>
+          {isAdmin && (
+            <button
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 11, color: 'var(--red, #e74c3c)', flexShrink: 0, alignSelf: 'flex-start', padding: '2px 6px' }}
+              onClick={() => deleteComment(c.id)}
+              title="Delete comment"
+            >✕</button>
+          )}
         </div>
       ))}
       <form onSubmit={submitComment} className="comment-input-row">
