@@ -111,24 +111,38 @@ export default function AnalyticsView() {
   const totalComments = profile.reduce((s, d) => s + (Number(d.comments) || 0), 0);
   const totalShares = profile.reduce((s, d) => s + (Number(d.shares) || 0), 0);
 
-  // Gender: average across recent rows
+  // Gender: handle both decimal (0.85) and percentage (85) from Coupler.io
+  // After a Replace-mode refresh, values may change format — detect and normalize
   const genderMap = {};
   data?.gender?.forEach(g => {
     if (!genderMap[g.gender]) genderMap[g.gender] = [];
-    // Coupler.io returns decimals (0.85) not percentages (85) — multiply by 100
-    genderMap[g.gender].push(g.percentage * 100);
+    const raw = Number(g.percentage) || 0;
+    // If any value > 1, Coupler is sending 0-100 already; otherwise multiply by 100
+    genderMap[g.gender].push(raw);
   });
-  const genderAvg = Object.entries(genderMap).map(([k, vals]) => ({
-    label: k,
-    value: Math.round(vals.reduce((s, v) => s + v, 0) / vals.length),
-    color: k === 'Male' ? 'var(--blue)' : k === 'Female' ? 'var(--purple)' : 'var(--text-dim)',
-  }));
+  // Detect scale: if max value across all entries > 1, already in percent
+  const allGenderVals = Object.values(genderMap).flat();
+  const genderIsPercent = allGenderVals.some(v => v > 1);
+  const genderAvg = Object.entries(genderMap).map(([k, vals]) => {
+    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+    return {
+      label: k,
+      value: Math.round(genderIsPercent ? avg : avg * 100),
+      color: k === 'Male' ? 'var(--blue)' : k === 'Female' ? 'var(--purple)' : 'var(--text-dim)',
+    };
+  });
 
-  // Country: latest date, top 8
+  // Country: detect scale same as gender, top 8
+  const allCountryVals = (data?.country || []).map(c => Number(c.percentage) || 0);
+  const countryIsPercent = allCountryVals.some(v => v > 1);
   const topCountries = [...(data?.country || [])]
     .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
     .slice(0, 8)
-    .map(c => ({ ...c, percentage: Math.round((c.percentage || 0) * 100 * 10) / 10 }));
+    .map(c => {
+      const raw = Number(c.percentage) || 0;
+      const pct = countryIsPercent ? Math.round(raw * 10) / 10 : Math.round(raw * 1000) / 10;
+      return { ...c, percentage: pct };
+    });
   const maxCountryPct = Math.max(...topCountries.map(c => c.percentage || 0), 1);
 
   // Hourly: average activity by hour across recent days
@@ -443,47 +457,74 @@ function TopVideosTable({ videos }) {
         <table>
           <thead>
             <tr>
+              <th style={{ width: 56 }}></th>
               <th>Video</th>
               <th>Views</th>
               <th>Likes</th>
               <th>Comments</th>
               <th>Shares</th>
+              <th>ER</th>
               <th>Avg Watch</th>
               <th>Completion</th>
               <th>Reach</th>
             </tr>
           </thead>
           <tbody>
-            {videos.map(v => (
-              <tr key={v.video_id}>
-                <td style={{ maxWidth: 200 }}>
-                  <div style={{ fontWeight: 500, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {v.video_title || v.video_id}
-                  </div>
-                  {v.create_time && (
-                    <div className="text-muted text-xs">
-                      {format(new Date(v.create_time), 'MMM d, yyyy')}
-                    </div>
-                  )}
-                </td>
-                <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
-                <td>{fmtNum(v.total_like)}</td>
-                <td>{fmtNum(v.total_comment)}</td>
-                <td>{fmtNum(v.total_share)}</td>
-                <td>{fmtSecs(v.average_time_watched)}</td>
-                <td>
-                  {v.full_video_watched_rate != null ? (
-                    <div className="flex items-center gap-8">
-                      <div style={{ width: 40, height: 4, background: 'var(--surface3)', borderRadius: 2 }}>
-                        <div style={{ width: `${v.full_video_watched_rate * 100}%`, height: '100%', background: 'var(--green)', borderRadius: 2 }} />
+            {videos.map(v => {
+              const er = v.total_play > 0
+                ? (((Number(v.total_like) || 0) + (Number(v.total_comment) || 0) + (Number(v.total_share) || 0)) / Number(v.total_play) * 100)
+                : null;
+              const erStr = er != null ? er.toFixed(2) : null;
+              const erColor = er > 5 ? 'var(--green)' : er > 2 ? 'var(--orange)' : 'var(--text-muted)';
+              return (
+                <tr key={v.video_id}>
+                  {/* Thumbnail */}
+                  <td style={{ padding: '6px 8px', width: 56 }}>
+                    {v.cover_image_url ? (
+                      <div
+                        onClick={() => openPopup(v.share_url || v.embed_url)}
+                        style={{ width: 40, height: 54, borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)', cursor: 'pointer', flexShrink: 0 }}
+                      >
+                        <img src={v.cover_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
-                      <span style={{ fontSize: 11 }}>{fmtPct(v.full_video_watched_rate)}</span>
+                    ) : (
+                      <div style={{ width: 40, height: 54, borderRadius: 4, background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🎬</div>
+                    )}
+                  </td>
+                  <td style={{ maxWidth: 180 }}>
+                    <div style={{ fontWeight: 500, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {v.video_title || v.video_id}
                     </div>
-                  ) : '—'}
-                </td>
-                <td>{fmtNum(v.reach)}</td>
-              </tr>
-            ))}
+                    {v.create_time && (
+                      <div className="text-muted text-xs">
+                        {format(new Date(v.create_time), 'MMM d, yyyy')}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ color: 'var(--orange)', fontWeight: 600 }}>{fmtNum(v.total_play)}</td>
+                  <td>{fmtNum(v.total_like)}</td>
+                  <td>{fmtNum(v.total_comment)}</td>
+                  <td>{fmtNum(v.total_share)}</td>
+                  <td>
+                    {erStr != null
+                      ? <span style={{ color: erColor, fontWeight: 600 }}>{erStr}%</span>
+                      : '—'}
+                  </td>
+                  <td>{fmtSecs(v.average_time_watched)}</td>
+                  <td>
+                    {v.full_video_watched_rate != null ? (
+                      <div className="flex items-center gap-8">
+                        <div style={{ width: 40, height: 4, background: 'var(--surface3)', borderRadius: 2 }}>
+                          <div style={{ width: `${Math.min(v.full_video_watched_rate * 100, 100)}%`, height: '100%', background: 'var(--green)', borderRadius: 2 }} />
+                        </div>
+                        <span style={{ fontSize: 11 }}>{fmtPct(v.full_video_watched_rate)}</span>
+                      </div>
+                    ) : '—'}
+                  </td>
+                  <td>{fmtNum(v.reach)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
