@@ -115,7 +115,7 @@ export default function PaymentsView() {
           <thead>
             <tr>
               <th>Campaign</th><th>Creator</th><th>Contracted</th>
-              <th>Agency Status</th><th>You Received</th><th>Amount In</th><th>Fee</th>
+              <th>Agency Status</th><th>You Received</th><th>Cash In / FMV</th><th>Fee</th>
               <th>Payout Status</th><th>Payout Out</th><th>Splits</th>
             </tr>
           </thead>
@@ -138,12 +138,12 @@ export default function PaymentsView() {
                 </td>
                 <td>
                   {isInKind(r.payment_method)
-                    ? <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>{fmtMoney(r.invoice_amount || r.contracted_rate)} (in kind)</span>
+                    ? <span style={{ fontSize: 12 }}><span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(r.invoice_amount || r.contracted_rate)}</span><span style={{ color: 'var(--text-dim)', fontSize: 10, marginLeft: 4 }}>FMV</span></span>
                     : r.amount_received != null
                       ? <span style={{ color: r.amount_received < (r.invoice_amount || r.contracted_rate) ? 'var(--orange)' : 'var(--text)' }}>{fmtMoney(r.amount_received)}</span>
                       : <span className="text-muted">—</span>}
                 </td>
-                <td>{r.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontSize: 12 }}>{fmtMoney(r.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
+                <td>{!isInKind(r.payment_method) && r.processing_fee > 0 ? <span style={{ color: 'var(--red)', fontSize: 12 }}>{fmtMoney(r.processing_fee)}</span> : <span className="text-muted">—</span>}</td>
                 <td><PayoutBadge status={isInKind(r.payment_method) ? 'N/A' : (r.payout_status || 'Pending')} /></td>
                 <td>
                   {isInKind(r.payment_method)

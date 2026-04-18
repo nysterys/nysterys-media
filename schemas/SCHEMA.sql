@@ -614,6 +614,7 @@ select
   inv.invoice_amount,
   inv.payment_status as agency_payment_status,
   inv.payment_received_date as agency_paid_date,
+  inv.payment_method,
   inv.amount_received,
   inv.processing_fee,
   inv.you_received,
