@@ -11,33 +11,33 @@ import AnalyticsView from '../components/admin/AnalyticsView';
 import TikTokAccountsView from '../components/admin/TikTokAccountsView';
 import PaymentDestinationsView from '../components/admin/PaymentDestinationsView';
 import PaymentMethodsView from '../components/admin/PaymentMethodsView';
-
 import CalendarView from '../components/admin/CalendarView';
-
 import RewardsView from '../components/admin/RewardsView';
+import CampaignFlowView from '../components/admin/CampaignFlowView';
 
 const NAV = [
   {
     label: null,
     items: [
-      { view: 'overview', icon: '◈', label: 'Overview' },
-      { view: 'campaigns', icon: '◎', label: 'Campaigns' },
-      { view: 'calendar', icon: '▦', label: 'Calendar' },
-      { view: 'payments', icon: '◇', label: 'Payments' },
-      { view: 'rewards', icon: '★', label: 'Rewards' },
-      { view: 'analytics', icon: '◉', label: 'Analytics' },
+      { view: 'overview',      icon: '◈', label: 'Overview' },
+      { view: 'campaigns',     icon: '◎', label: 'Campaigns' },
+      { view: 'calendar',      icon: '▦', label: 'Calendar' },
+      { view: 'payments',      icon: '◇', label: 'Payments' },
+      { view: 'rewards',       icon: '★', label: 'Rewards' },
+      { view: 'analytics',     icon: '◉', label: 'Analytics' },
+      { view: 'campaign-flow', icon: '⟶', label: 'Campaign Flow' },
     ]
   },
   {
     label: 'Setup',
     items: [
-      { view: 'agencies', icon: '⬡', label: 'Agencies & Labels' },
-      { view: 'platforms', icon: '◻', label: 'Platforms' },
-      { view: 'deliverable-types', icon: '◈', label: 'Deliverable Types' },
-      { view: 'payout-destinations', icon: '◇', label: 'Payment Destinations' },
-      { view: 'payment-methods', icon: '◈', label: 'Payment Methods' },
-      { view: 'tiktok-accounts', icon: '◎', label: 'TikTok Accounts' },
-      { view: 'users', icon: '○', label: 'Users' },
+      { view: 'agencies',           icon: '⬡', label: 'Agencies & Labels' },
+      { view: 'platforms',          icon: '◻', label: 'Platforms' },
+      { view: 'deliverable-types',  icon: '◈', label: 'Deliverable Types' },
+      { view: 'payout-destinations',icon: '◇', label: 'Payment Destinations' },
+      { view: 'payment-methods',    icon: '◈', label: 'Payment Methods' },
+      { view: 'tiktok-accounts',    icon: '◎', label: 'TikTok Accounts' },
+      { view: 'users',              icon: '○', label: 'Users' },
     ]
   }
 ];
@@ -47,20 +47,21 @@ export default function AdminDashboard() {
 
   function renderView() {
     switch (activeView) {
-      case 'overview': return <AdminOverview setActiveView={setActiveView} />;
-      case 'campaigns': return <CampaignsView />;
-      case 'calendar': return <CalendarView />;
-      case 'payments': return <PaymentsView />;
-      case 'rewards': return <RewardsView />;
-      case 'analytics': return <AnalyticsView />;
-      case 'agencies': return <AgenciesView />;
-      case 'platforms': return <PlatformsView />;
-      case 'deliverable-types': return <DeliverablesTypesView />;
+      case 'overview':            return <AdminOverview setActiveView={setActiveView} />;
+      case 'campaigns':           return <CampaignsView />;
+      case 'calendar':            return <CalendarView />;
+      case 'payments':            return <PaymentsView />;
+      case 'rewards':             return <RewardsView />;
+      case 'analytics':           return <AnalyticsView />;
+      case 'campaign-flow':       return <CampaignFlowView />;
+      case 'agencies':            return <AgenciesView />;
+      case 'platforms':           return <PlatformsView />;
+      case 'deliverable-types':   return <DeliverablesTypesView />;
       case 'payout-destinations': return <PaymentDestinationsView />;
-      case 'payment-methods': return <PaymentMethodsView />;
-      case 'tiktok-accounts': return <TikTokAccountsView />;
-      case 'users': return <UsersView />;
-      default: return <AdminOverview setActiveView={setActiveView} />;
+      case 'payment-methods':     return <PaymentMethodsView />;
+      case 'tiktok-accounts':     return <TikTokAccountsView />;
+      case 'users':               return <UsersView />;
+      default:                    return <AdminOverview setActiveView={setActiveView} />;
     }
   }
 
