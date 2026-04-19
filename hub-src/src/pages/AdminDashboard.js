@@ -28,7 +28,7 @@ const NAV = [
   {
     label: 'Setup',
     items: [
-      { view: 'agencies',          icon: '⬡', label: 'Agencies & Labels' },
+      { view: 'agencies',          icon: '⬡', label: 'Agency Setup' },
       { view: 'platform-setup',    icon: '◻', label: 'Platform Setup' },
       { view: 'payment-setup',     icon: '◇', label: 'Payment Setup' },
       { view: 'users',             icon: '○', label: 'Users' },

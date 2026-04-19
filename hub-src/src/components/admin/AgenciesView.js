@@ -56,7 +56,7 @@ export default function AgenciesView() {
     <div className="page">
       <div className="page-header">
         <div>
-          <div className="page-title">AGENCIES & LABELS</div>
+          <div className="page-title">AGENCY SETUP</div>
           <div className="page-subtitle">Set up once, reuse across all campaigns</div>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setShowModal(true); }}>+ New Agency</button>
@@ -72,6 +72,7 @@ export default function AgenciesView() {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
+              <col style={{ width: 36 }} />
               <col style={{ width: '16%' }} />
               <col style={{ width: '13%' }} />
               <col style={{ width: '20%' }} />
@@ -81,7 +82,7 @@ export default function AgenciesView() {
               <col style={{ width: 160 }} />
             </colgroup>
             <thead>
-              <tr><th>Name</th><th>Contact</th><th>Email</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Name</th><th>Contact</th><th>Email</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {agencies.map(a => {
@@ -89,11 +90,22 @@ export default function AgenciesView() {
                 const hasStats = creatorStats.length > 0;
                 return (
                   <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
-                    <td style={{ fontWeight: 500 }}>
+                    <td style={{ paddingRight: 0 }}>
                       {a.website ? (
-                        <a href={a.website} target="_blank" rel="noreferrer" className="link">{a.name}</a>
-                      ) : a.name}
+                        <a href={a.website} target="_blank" rel="noreferrer" title={a.website}
+                          style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                          </svg>
+                        </a>
+                      ) : (
+                        <span style={{ display: 'inline-block', width: 14 }} />
+                      )}
                     </td>
+                    <td style={{ fontWeight: 500 }}>{a.name}</td>
                     <td>{a.contact_name || <span className="text-muted">—</span>}</td>
                     <td style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email || <span className="text-muted">—</span>}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
