@@ -72,7 +72,7 @@ export default function AgenciesView() {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
-              <col style={{ width: 36 }} />
+              <col style={{ width: 60 }} />
               <col style={{ width: '16%' }} />
               <col style={{ width: '13%' }} />
               <col style={{ width: '20%' }} />
@@ -91,19 +91,35 @@ export default function AgenciesView() {
                 return (
                   <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
                     <td style={{ paddingRight: 0 }}>
-                      {a.website ? (
-                        <a href={a.website} target="_blank" rel="noreferrer" title={a.website}
-                          style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
-                          onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                          </svg>
-                        </a>
-                      ) : (
-                        <span style={{ display: 'inline-block', width: 14 }} />
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {a.website ? (
+                          <a href={a.website} target="_blank" rel="noreferrer" title={a.website}
+                            style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                          </a>
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 14 }} />
+                        )}
+                        {a.portal_url ? (
+                          <a href={a.portal_url} target="_blank" rel="noreferrer" title={`Portal: ${a.portal_url}`}
+                            style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
+                            onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                              <polyline points="10 17 15 12 10 7"/>
+                              <line x1="15" y1="12" x2="3" y2="12"/>
+                            </svg>
+                          </a>
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 14 }} />
+                        )}
+                      </div>
                     </td>
                     <td style={{ fontWeight: 500 }}>{a.name}</td>
                     <td>{a.contact_name || <span className="text-muted">—</span>}</td>
@@ -163,6 +179,7 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
     email:         agency?.email         || '',
     phone:         agency?.phone         || '',
     website:       agency?.website       || '',
+    portal_url:    agency?.portal_url    || '',
     payment_terms: agency?.payment_terms || paymentTerms[0] || '',
     notes:         agency?.notes         || '',
   });
@@ -183,7 +200,7 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
     if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
-    const payload = { ...form, website: normalizeUrl(form.website) };
+    const payload = { ...form, website: normalizeUrl(form.website), portal_url: normalizeUrl(form.portal_url) };
     if (agency) {
       await supabase.from('agencies').update(payload).eq('id', agency.id);
     } else {
@@ -225,6 +242,10 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
               <label className="form-label">Website</label>
               <input className="form-input" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="ytkmedia.com" />
             </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Portal URL</label>
+            <input className="form-input" value={form.portal_url} onChange={e => setForm(f => ({ ...f, portal_url: e.target.value }))} placeholder="creator-portal.agency.com" />
           </div>
           <div className="form-row">
             <div className="form-group">
