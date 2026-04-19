@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { SparkLine, BarChart, HBar, DonutChart, StatTile, ChartCard, fmtNum, fmtSecs, fmtPct } from './Charts';
-import { format, parseISO, subDays, addDays } from 'date-fns';
-import { fmtDate } from '../../utils/format';
+import { format, parseISO, addDays } from 'date-fns';
+import { fmtDate, extractMonths } from '../../utils/format';
+import { inPeriod, PeriodSelect } from '../../utils/period';
 
 function openPopup(url) {
   if (!url) return;
@@ -55,8 +56,8 @@ function getMilestones(current) {
 
 function fmtMilestone(n) {
   if (n >= 1_000_000) {
-    const s = (n / 1_000_000).toString();
-    return s.replace(/\.?0+$/, '') + 'M';
+    const v = Math.round(n / 10_000) / 100;
+    return (v % 1 === 0 ? v.toFixed(0) : v % 0.1 === 0 ? v.toFixed(1) : v.toFixed(2)) + 'M';
   }
   return Math.round(n / 1_000) + 'K';
 }
@@ -78,25 +79,27 @@ function FollowerTrendChart({ rows }) {
   const wls = wlsReg(ys, 2.5);
   const ma  = movingAvg(ys, 30);
 
-  // Daily net-follower std-dev for confidence cone
-  const nets   = clean.map(d => Number(d.net_followers) || 0);
-  const meanNet = nets.reduce((s, v) => s + v, 0) / nets.length;
-  const stdNet  = Math.sqrt(nets.reduce((s, v) => s + (v - meanNet) ** 2, 0) / Math.max(nets.length - 1, 1));
+  // CI from WLS residuals (robust — unaffected by outlier net_followers values)
+  const fittedWLS = ys.map((_, i) => wls.intercept + wls.slope * i);
+  const residuals = ys.map((v, i) => v - fittedWLS[i]);
+  const stdRes    = Math.sqrt(residuals.reduce((s, v) => s + v ** 2, 0) / Math.max(n - 2, 1));
 
   const FCAST = 90;
   const fYs   = Array.from({ length: FCAST }, (_, k) =>
     Math.max(0, wls.intercept + wls.slope * (n + k)));
-  const ciHi  = fYs.map((v, k) => v + 1.645 * stdNet * Math.sqrt(k + 1));
-  const ciLo  = fYs.map((v, k) => Math.max(0, v - 1.645 * stdNet * Math.sqrt(k + 1)));
+
+  // Scale y-axis on actual data + forecast only — CI is clipped to this range
+  const W = 1000, H = 160;
+  const yMin    = Math.max(0, Math.min(...ys) * 0.97);
+  const yMaxRaw = Math.max(...ys, ...fYs) * 1.08;
+  const yMax    = yMaxRaw;
+
+  // Build CI after yMax is known so we can clamp it
+  const ciHi = fYs.map((v, k) => Math.min(yMax, v + 1.645 * stdRes * Math.sqrt(k + 1)));
+  const ciLo = fYs.map((v, k) => Math.max(yMin, v - 1.645 * stdRes * Math.sqrt(k + 1)));
 
   const olsLine = Array.from({ length: n + FCAST }, (_, i) =>
     ols.intercept + ols.slope * i);
-
-  // SVG coordinate space
-  const W = 1000, H = 160;
-  const allVals = [...ys, ...ciHi];
-  const yMin = Math.max(0, Math.min(...ys) * 0.97);
-  const yMax = Math.max(...allVals) * 1.02;
   const xTotal = n + FCAST;
 
   const sx = i => (i / (xTotal - 1)) * W;
@@ -112,7 +115,6 @@ function FollowerTrendChart({ rows }) {
   ].join(' ');
 
   // X-axis date labels
-  const firstDate  = parseISO(clean[0].date);
   const labelCount = 8;
   const dateLabels = Array.from({ length: labelCount }, (_, i) => {
     const idx = Math.round(i * (xTotal - 1) / (labelCount - 1));
@@ -126,14 +128,20 @@ function FollowerTrendChart({ rows }) {
     label: fmtNum(Math.round(yMin + (yMax - yMin) * (1 - i / yLevels))),
   }));
 
+  const firstDate  = parseISO(clean[0].date);
+  const lastDate   = parseISO(clean[n - 1].date);
+
   return (
     <div>
-      <div style={{ display: 'flex', gap: 20, fontSize: 11, marginBottom: 10, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
+      <div style={{ display: 'flex', gap: 20, fontSize: 11, marginBottom: 6, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
         <span><span style={{ color: 'var(--orange)', fontWeight: 700 }}>—</span> Actual</span>
         <span><span style={{ color: 'var(--blue)', opacity: 0.7, fontWeight: 700 }}>—</span> Linear (OLS)</span>
         <span><span style={{ color: 'var(--green)', fontWeight: 700 }}>—</span> 30-day MA</span>
         <span><span style={{ color: 'var(--purple)', fontWeight: 700 }}>—</span> WLS forecast</span>
-        <span style={{ color: 'var(--text-dim)' }}>Shaded band = 90% confidence interval</span>
+        <span style={{ color: 'var(--text-dim)' }}>Shaded band = 90% CI</span>
+        <span style={{ color: 'var(--text-dim)', marginLeft: 'auto' }}>
+          {n} data points · {format(firstDate, 'MMM d, yyyy')} – {format(lastDate, 'MMM d, yyyy')} · WLS slope: +{Math.round(wls.slope).toLocaleString()}/day · OLS slope: +{Math.round(ols.slope).toLocaleString()}/day
+        </span>
       </div>
       <div style={{ position: 'relative' }}>
         {/* Y-axis labels */}
@@ -198,7 +206,8 @@ function MilestoneTable({ rows }) {
   const milestones = getMilestones(current);
   if (milestones.length === 0) return null;
 
-  const today = parseISO(clean[n - 1].date);
+  const today     = parseISO(clean[n - 1].date);
+  const firstDay  = parseISO(clean[0].date);
 
   // Days until model reaches target, starting from today (index n-1)
   function daysTo(model, target) {
@@ -218,6 +227,7 @@ function MilestoneTable({ rows }) {
         Current: <strong style={{ color: 'var(--orange)' }}>{fmtNum(current)}</strong>
         {' · '}30-day avg growth: <strong style={{ color: 'var(--green)' }}>+{Math.round(daily30).toLocaleString()}/day</strong>
         {' · '}WLS slope: <strong style={{ color: 'var(--purple)' }}>+{Math.round(wls.slope).toLocaleString()}/day</strong>
+        {' · '}<span style={{ color: 'var(--text-dim)' }}>{n} data points · {format(firstDay, 'MMM d, yyyy')} – {format(today, 'MMM d, yyyy')}</span>
       </div>
       <div className="table-wrap" style={{ border: 'none' }}>
         <table>
@@ -459,14 +469,14 @@ function NoDataState({ username }) {
 // ── Main shared component ─────────────────────────────────────────────────────
 
 export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
-  const [accounts, setAccounts]           = useState([]);
+  const [accounts, setAccounts]               = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
-  const [dateRange, setDateRange]         = useState(30);
-  const [loading, setLoading]             = useState(true);
-  const [data, setData]                   = useState(null);
+  const [period, setPeriod]                   = useState('all');
+  const [loading, setLoading]                 = useState(true);
+  const [data, setData]                       = useState(null);
 
   useEffect(() => { fetchAccounts(); }, []);
-  useEffect(() => { if (selectedAccount) fetchData(); }, [selectedAccount, dateRange]); // eslint-disable-line
+  useEffect(() => { if (selectedAccount) fetchData(); }, [selectedAccount]); // eslint-disable-line
 
   async function fetchAccounts() {
     if (isAdmin) {
@@ -493,29 +503,22 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
     if (!selectedAccount) return;
     setLoading(true);
     const username = selectedAccount.tiktok_username;
-    const since    = format(subDays(new Date(), dateRange), 'yyyy-MM-dd');
 
-    const [allProfileRes, profileRes, genderRes, countryRes, hourlyRes, videoRes, campaignRes] = await Promise.all([
-      // All history — for trend chart and milestone predictions (no date limit)
-      supabase.from('tiktok_profile_insights_view')
-        .select('date, followers_count, net_followers')
-        .eq('tiktok_username', username)
-        .order('date', { ascending: true }),
-      // Date-filtered — for KPI tiles and engagement charts
+    const [profileRes, genderRes, countryRes, hourlyRes, videoRes, campaignRes] = await Promise.all([
+      // All history — trend chart, milestones, and KPI tiles (period-filtered client-side)
       supabase.from('tiktok_profile_insights_view')
         .select('*')
         .eq('tiktok_username', username)
-        .gte('date', since)
-        .order('date', { ascending: true }),
+        .order('date', { ascending: true })
+        .limit(5000),
       supabase.from('tiktok_audience_gender_view').select('*').eq('tiktok_username', username),
       supabase.from('tiktok_audience_country_view').select('*').eq('tiktok_username', username),
       supabase.from('tiktok_audience_hourly_view').select('*').eq('tiktok_username', username),
-      // Fetch up to 100 for the count selector
       supabase.from('tiktok_video_insights_view')
         .select('*')
         .eq('tiktok_username', username)
         .order('total_play', { ascending: false })
-        .limit(100),
+        .limit(500),
       supabase.from('campaign_deliverables_with_stats')
         .select('*, campaign:campaigns!inner(campaign_name, brand_name, creator_profile_id, agency:agencies(name))')
         .eq('campaign.creator_profile_id', selectedAccount.profile_id)
@@ -526,8 +529,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
     ]);
 
     setData({
-      profileAll:    allProfileRes.data  || [],
-      profile:       profileRes.data     || [],
+      profileAll:    profileRes.data     || [],
       gender:        genderRes.data      || [],
       country:       countryRes.data     || [],
       hourly:        hourlyRes.data      || [],
@@ -570,20 +572,40 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
-  const profile      = data?.profile || [];
-  const profileAll   = data?.profileAll || [];
-  const profileClean = profile.filter(d => Number(d.followers_count) > 0 && Number(d.net_followers) > 0);
-  const latestProfile  = profileClean[profileClean.length - 1];
-  const earliestProfile = profileClean[0];
+  const profileAll = data?.profileAll || [];
 
-  const followerGrowth = latestProfile && earliestProfile
-    ? latestProfile.followers_count - earliestProfile.followers_count
+  // All-time clean: for trend chart and current follower count
+  const profileAllClean = profileAll
+    .filter(d => Number(d.followers_count) > 100);
+
+  // Period-filtered: for KPI tiles and engagement sparklines
+  const profileFiltered = profileAll
+    .filter(d => inPeriod(d.date, period) && Number(d.followers_count) > 100);
+
+  const latestProfile   = profileAllClean[profileAllClean.length - 1];
+  const earliestFiltered = profileFiltered[0];
+  const latestFiltered   = profileFiltered[profileFiltered.length - 1];
+
+  const followerGrowth = latestFiltered && earliestFiltered
+    ? Number(latestFiltered.followers_count) - Number(earliestFiltered.followers_count)
     : null;
 
-  const totalViews    = profile.reduce((s, d) => s + (Number(d.video_views) || 0), 0);
-  const totalLikes    = profile.reduce((s, d) => s + (Number(d.likes) || 0), 0);
-  const totalComments = profile.reduce((s, d) => s + (Number(d.comments) || 0), 0);
-  const totalShares   = profile.reduce((s, d) => s + (Number(d.shares) || 0), 0);
+  // Use period-filtered alias for engagement charts (matches old `profileClean` usage)
+  const profileClean = profileFiltered;
+
+  const totalViews    = profileFiltered.reduce((s, d) => s + (Number(d.video_views) || 0), 0);
+  const totalLikes    = profileFiltered.reduce((s, d) => s + (Number(d.likes) || 0), 0);
+  const totalComments = profileFiltered.reduce((s, d) => s + (Number(d.comments) || 0), 0);
+  const totalShares   = profileFiltered.reduce((s, d) => s + (Number(d.shares) || 0), 0);
+
+  // Months for PeriodSelect, derived from all history
+  const months = extractMonths(profileAll, 'date');
+
+  // Videos filtered by period
+  const videosFiltered = (data?.videos || []).filter(v =>
+    inPeriod(v.create_time ? v.create_time.slice(0, 10) : null, period)
+  );
+
 
   // Gender: normalise 0-1 vs 0-100
   const genderMap = {};
@@ -625,8 +647,6 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
   const hourlyAvg = hourlyRaw.map(h => ({ ...h, value: (h.value / hourlyMax) * 100 }));
   const peakHour  = hourlyAvg.reduce((max, h) => h.value > max.value ? h : max, { value: 0, label: '—' });
 
-  const dateRangeLabel = ({ 7: 'Last 7 days', 14: 'Last 14 days', 30: 'Last 30 days', 60: 'Last 60 days', 90: 'Last 90 days', 365: 'Last 12 months' })[dateRange] || `Last ${dateRange} days`;
-
   return (
     <div className="page">
       <div className="page-header">
@@ -652,88 +672,90 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
               ))}
             </div>
           )}
-          <select
-            className="form-select"
-            style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}
-            value={dateRange}
-            onChange={e => setDateRange(Number(e.target.value))}
-          >
-            <option value={7}>Last 7 days</option>
-            <option value={14}>Last 14 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={60}>Last 60 days</option>
-            <option value={90}>Last 90 days</option>
-            <option value={365}>Last 12 months</option>
-          </select>
+          <PeriodSelect period={period} onChange={setPeriod} months={months} />
         </div>
       </div>
 
       {loading ? (
         <div className="text-muted">Loading analytics...</div>
-      ) : profileClean.length === 0 ? (
+      ) : profileAllClean.length === 0 ? (
         <NoDataState username={selectedAccount?.tiktok_username} />
       ) : (
         <>
           {/* KPI tiles */}
           <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
             <StatTile label="Followers" value={fmtNum(latestProfile?.followers_count)} trend={followerGrowth} color="stat-accent" />
-            <StatTile label={`Views (${dateRange}d)`} value={fmtNum(totalViews)} color="stat-green" />
-            <StatTile label={`Likes (${dateRange}d)`} value={fmtNum(totalLikes)} />
-            <StatTile label={`Comments (${dateRange}d)`} value={fmtNum(totalComments)} />
-            <StatTile label={`Shares (${dateRange}d)`} value={fmtNum(totalShares)} />
+            <StatTile label="Views" value={fmtNum(totalViews)} color="stat-green" />
+            <StatTile label="Likes" value={fmtNum(totalLikes)} />
+            <StatTile label="Comments" value={fmtNum(totalComments)} />
+            <StatTile label="Shares" value={fmtNum(totalShares)} />
           </div>
 
           {/* Follower count trend + forecast (all history) */}
           <ChartCard title="FOLLOWER COUNT TREND & FORECAST (ALL HISTORY)">
-            <FollowerTrendChart rows={profileAll} />
+            <FollowerTrendChart rows={profileAllClean} />
           </ChartCard>
 
           {/* Milestone predictions */}
-          <MilestoneTable rows={profileAll} />
+          <MilestoneTable rows={profileAllClean} />
 
-          {/* Daily new followers (date-range filtered) */}
-          <ChartCard title={`DAILY NEW FOLLOWERS — ${dateRangeLabel.toUpperCase()}`}>
-            <SparkLine
-              data={profileClean.map(d => Number(d.net_followers) || 0)}
-              xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
-              color="var(--orange)"
-              height={80}
-              fill={true}
-              valueFormatter={v => fmtNum(v)}
-            />
-            <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              <span>{earliestProfile && format(parseISO(earliestProfile.date), 'MMM d')}</span>
-              <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
-            </div>
+          {/* Daily new followers (period-filtered) */}
+          <ChartCard title="DAILY NEW FOLLOWERS">
+            {profileClean.length === 0 ? (
+              <div className="text-muted text-sm">No data for selected period</div>
+            ) : (
+              <>
+                <SparkLine
+                  data={profileClean.map(d => Number(d.net_followers) || 0)}
+                  xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
+                  color="var(--orange)"
+                  height={80}
+                  fill={true}
+                  valueFormatter={v => fmtNum(v)}
+                />
+                <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                  <span>{earliestFiltered && format(parseISO(earliestFiltered.date), 'MMM d')}</span>
+                  <span style={{ marginLeft: 'auto' }}>{latestFiltered && format(parseISO(latestFiltered.date), 'MMM d')}</span>
+                </div>
+              </>
+            )}
           </ChartCard>
 
           {/* Views + Likes */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <ChartCard title={`DAILY VIDEO VIEWS — ${dateRangeLabel.toUpperCase()}`}>
-              <SparkLine
-                data={profileClean.map(d => Number(d.video_views) || 0)}
-                xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
-                color="var(--blue)"
-                height={70}
-                valueFormatter={v => fmtNum(v)}
-              />
-              <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                <span>{earliestProfile && format(parseISO(earliestProfile.date), 'MMM d')}</span>
-                <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
-              </div>
+            <ChartCard title="DAILY VIDEO VIEWS">
+              {profileClean.length === 0 ? <div className="text-muted text-sm">No data for selected period</div> : (
+                <>
+                  <SparkLine
+                    data={profileClean.map(d => Number(d.video_views) || 0)}
+                    xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
+                    color="var(--blue)"
+                    height={70}
+                    valueFormatter={v => fmtNum(v)}
+                  />
+                  <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                    <span>{earliestFiltered && format(parseISO(earliestFiltered.date), 'MMM d')}</span>
+                    <span style={{ marginLeft: 'auto' }}>{latestFiltered && format(parseISO(latestFiltered.date), 'MMM d')}</span>
+                  </div>
+                </>
+              )}
             </ChartCard>
-            <ChartCard title={`DAILY LIKES — ${dateRangeLabel.toUpperCase()}`}>
-              <SparkLine
-                data={profileClean.map(d => Number(d.likes) || 0)}
-                xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
-                color="var(--purple)"
-                height={70}
-                valueFormatter={v => fmtNum(v)}
-              />
-              <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-                <span>{earliestProfile && format(parseISO(earliestProfile.date), 'MMM d')}</span>
-                <span style={{ marginLeft: 'auto' }}>{latestProfile && format(parseISO(latestProfile.date), 'MMM d')}</span>
-              </div>
+            <ChartCard title="DAILY LIKES">
+              {profileClean.length === 0 ? <div className="text-muted text-sm">No data for selected period</div> : (
+                <>
+                  <SparkLine
+                    data={profileClean.map(d => Number(d.likes) || 0)}
+                    xLabels={profileClean.map(d => format(parseISO(d.date), 'MMM d'))}
+                    color="var(--purple)"
+                    height={70}
+                    valueFormatter={v => fmtNum(v)}
+                  />
+                  <div className="flex gap-16 mt-8" style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                    <span>{earliestFiltered && format(parseISO(earliestFiltered.date), 'MMM d')}</span>
+                    <span style={{ marginLeft: 'auto' }}>{latestFiltered && format(parseISO(latestFiltered.date), 'MMM d')}</span>
+                  </div>
+                </>
+              )}
             </ChartCard>
           </div>
 
@@ -743,7 +765,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
               {genderAvg.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
-                  {profile.length > 0 && (
+                  {profileAll.length > 0 && (
                     <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
                       ⚠ Re-run <strong>13-reapply-tiktok-rls.sql</strong> to restore access after Coupler sync.
                     </div>
@@ -755,7 +777,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
               {topCountries.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
-                  {profile.length > 0 && (
+                  {profileAll.length > 0 && (
                     <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
                       ⚠ Re-run <strong>13-reapply-tiktok-rls.sql</strong> after Coupler sync.
                     </div>
@@ -771,7 +793,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
           </div>
 
           <CampaignPerformanceTable campaignStats={data?.campaignStats} />
-          <TopVideosTable videos={data?.videos} />
+          <TopVideosTable videos={videosFiltered.length > 0 ? videosFiltered : (data?.videos || [])} />
         </>
       )}
     </div>
