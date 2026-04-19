@@ -1,17 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { PlatformLogo } from '../shared/PlatformLogo';
 
 export default function UsersView() {
-  const [users, setUsers]         = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [users, setUsers]             = useState([]);
+  const [platformAccounts, setPlatformAccounts] = useState([]);
+  const [loading, setLoading]         = useState(true);
   const [editingUser, setEditingUser] = useState(null);
 
   useEffect(() => { fetchUsers(); }, []);
 
   async function fetchUsers() {
-    const { data } = await supabase.from('profiles').select('*').order('full_name');
-    setUsers(data || []);
+    const [uRes, aRes] = await Promise.all([
+      supabase.from('profiles').select('*').order('full_name'),
+      supabase.from('platform_accounts').select('profile_id, platform').eq('is_active', true),
+    ]);
+    setUsers(uRes.data || []);
+    setPlatformAccounts(aRes.data || []);
     setLoading(false);
+  }
+
+  function platformsForUser(userId) {
+    return [...new Set(
+      platformAccounts.filter(a => a.profile_id === userId).map(a => a.platform)
+    )];
   }
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -28,31 +40,44 @@ export default function UsersView() {
       <div className="table-wrap">
         <table style={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '28%' }} />
-            <col style={{ width: 80 }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '24%' }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: '14%' }} />
             <col style={{ width: '18%' }} />
-            <col style={{ width: 130 }} />
+            <col style={{ width: 110 }} />
             <col />
           </colgroup>
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Creator Name</th><th>Idle Timeout</th><th></th></tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Creator Name</th><th>Platforms</th><th>Idle Timeout</th><th></th></tr>
           </thead>
           <tbody>
-            {users.map(u => (
-              <tr key={u.id}>
-                <td style={{ fontWeight: 500 }}>{u.full_name}</td>
-                <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{u.email}</td>
-                <td><span className={`badge ${u.role === 'admin' ? 'badge-active' : 'badge-confirmed'}`}>{u.role}</span></td>
-                <td>{u.creator_name || <span className="text-muted">—</span>}</td>
-                <td style={{ fontSize: 12, color: u.idle_timeout_minutes ? 'var(--text)' : 'var(--text-muted)' }}>
-                  {u.idle_timeout_minutes ? `${u.idle_timeout_minutes} min` : 'Disabled'}
-                </td>
-                <td>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingUser(u)}>Edit</button>
-                </td>
-              </tr>
-            ))}
+            {users.map(u => {
+              const platforms = u.role === 'creator' ? platformsForUser(u.id) : [];
+              return (
+                <tr key={u.id}>
+                  <td style={{ fontWeight: 500 }}>{u.full_name}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{u.email}</td>
+                  <td><span className={`badge ${u.role === 'admin' ? 'badge-active' : 'badge-confirmed'}`}>{u.role}</span></td>
+                  <td>{u.creator_name || <span className="text-muted">—</span>}</td>
+                  <td>
+                    {platforms.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {platforms.map(p => <PlatformLogo key={p} name={p} size={20} />)}
+                      </div>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12, color: u.idle_timeout_minutes ? 'var(--text)' : 'var(--text-muted)' }}>
+                    {u.idle_timeout_minutes ? `${u.idle_timeout_minutes} min` : 'Disabled'}
+                  </td>
+                  <td>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setEditingUser(u)}>Edit</button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
