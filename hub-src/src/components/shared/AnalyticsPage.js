@@ -114,6 +114,9 @@ function FollowerTrendChart({ rows }) {
     ...Array.from({ length: FCAST }, (_, k) => `${sx(n + FCAST - 1 - k).toFixed(1)},${sy(ciLo[FCAST - 1 - k]).toFixed(1)}`),
   ].join(' ');
 
+  const firstDate  = parseISO(clean[0].date);
+  const lastDate   = parseISO(clean[n - 1].date);
+
   // X-axis date labels
   const labelCount = 8;
   const dateLabels = Array.from({ length: labelCount }, (_, i) => {
@@ -127,9 +130,6 @@ function FollowerTrendChart({ rows }) {
     pct: (i / yLevels) * 100,
     label: fmtNum(Math.round(yMin + (yMax - yMin) * (1 - i / yLevels))),
   }));
-
-  const firstDate  = parseISO(clean[0].date);
-  const lastDate   = parseISO(clean[n - 1].date);
 
   return (
     <div>
