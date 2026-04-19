@@ -780,17 +780,20 @@ select distinct on (tiktok_username, video_id) * from (
 ) t
 order by tiktok_username, video_id, create_time desc;
 
--- Video Countries (Coupler: Replace mode)
+-- Video Countries (Coupler: Append mode)
 create or replace view public.tiktok_video_countries_view as
-select account__username as tiktok_username,
-  video__video_id as video_id,
-  audience__country as country,
-  video____of_viewers as percentage
-from public.tiktok_video_countries_kym
-union all
-select account__username, video__video_id,
-  audience__country, video____of_viewers
-from public.tiktok_video_countries_mys;
+select distinct on (tiktok_username, date, video_id, country) * from (
+  select account__username as tiktok_username,
+    report__date as date,
+    video__video_id as video_id,
+    audience__country as country,
+    video____of_viewers as percentage
+  from public.tiktok_video_countries_kym
+  union all
+  select account__username, report__date,
+    video__video_id, audience__country, video____of_viewers
+  from public.tiktok_video_countries_mys
+) t order by tiktok_username, date desc, video_id, country;
 
 -- Campaign deliverables with TikTok stats
 create or replace view public.campaign_deliverables_with_stats as
@@ -926,11 +929,15 @@ begin
   begin
     execute $v$
       create or replace view public.tiktok_video_countries_view as
-      select account__username as tiktok_username, video__video_id as video_id,
-        audience__country as country, video____of_viewers as percentage
-      from public.tiktok_video_countries_kym union all
-      select account__username, video__video_id, audience__country, video____of_viewers
-      from public.tiktok_video_countries_mys;
+      select distinct on (tiktok_username, date, video_id, country) * from (
+        select account__username as tiktok_username, report__date as date,
+          video__video_id as video_id, audience__country as country,
+          video____of_viewers as percentage
+        from public.tiktok_video_countries_kym union all
+        select account__username, report__date, video__video_id,
+          audience__country, video____of_viewers
+        from public.tiktok_video_countries_mys
+      ) t order by tiktok_username, date desc, video_id, country;
     $v$;
     execute 'grant select on public.tiktok_video_countries_view to authenticated;';
   exception when others then null;
