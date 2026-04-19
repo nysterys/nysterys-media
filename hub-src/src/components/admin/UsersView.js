@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { PlatformLogo } from '../shared/PlatformLogo';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function UsersView() {
+  const { user: currentUser, fetchProfile } = useAuth();
   const [users, setUsers]             = useState([]);
   const [platformAccounts, setPlatformAccounts] = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -97,7 +99,11 @@ export default function UsersView() {
         <EditUserModal
           user={editingUser}
           onClose={() => setEditingUser(null)}
-          onSaved={() => { setEditingUser(null); fetchUsers(); }}
+          onSaved={() => {
+            if (editingUser.id === currentUser?.id) fetchProfile(currentUser.id);
+            setEditingUser(null);
+            fetchUsers();
+          }}
         />
       )}
     </div>
