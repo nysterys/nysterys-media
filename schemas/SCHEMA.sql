@@ -469,11 +469,6 @@ create policy "Creators can read own platform accounts" on public.platform_accou
 create trigger handle_updated_at before update on public.platform_accounts
   for each row execute function public.handle_updated_at();
 
--- Compatibility view for analytics RLS policies that reference tiktok_accounts
-create view public.tiktok_accounts as
-  select id, profile_id, username as tiktok_username, display_name, is_active, created_at, updated_at
-  from public.platform_accounts
-  where platform = 'tiktok';
 
 -- ============================================================
 -- PAYMENT DESTINATIONS (per creator)
@@ -888,8 +883,8 @@ begin
           'create policy "admin_all" on public.%I for all using (public.get_my_role() = ''admin'');', tbl);
         execute format(
           'create policy "creator_own" on public.%I for select using (
-            exists (select 1 from public.tiktok_accounts ta
-            where ta.tiktok_username = %I.account__username and ta.profile_id = auth.uid()));',
+            exists (select 1 from public.platform_accounts pa
+            where pa.platform = ''tiktok'' and pa.username = %I.account__username and pa.profile_id = auth.uid()));',
           tbl, tbl);
       exception when others then null;
       end;
