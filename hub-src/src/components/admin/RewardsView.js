@@ -355,14 +355,12 @@ function RewardInvoiceForm({ entry, onUpdated }) {
     setForm({
       invoice_number: inv?.invoice_number || '',
       invoice_date: inv?.invoice_date || invoiceDate,
-      invoice_amount: inv?.invoice_amount ?? entry?.gross_amount ?? '',
       payment_status: inv?.payment_status || 'Not Invoiced',
       payment_received_date: inv?.payment_received_date || paidDate,
       payment_method: inv?.payment_method || '',
       payment_notes: inv?.payment_notes || '',
       you_received: inv?.you_received ?? false,
       you_received_date: inv?.you_received_date || '',
-      amount_received: inv?.amount_received ?? '',
       processing_fee: inv?.processing_fee ?? '',
       you_received_notes: inv?.you_received_notes || '',
     });
@@ -374,14 +372,16 @@ function RewardInvoiceForm({ entry, onUpdated }) {
     const payload = {
       invoice_number: form.invoice_number || null,
       invoice_date: form.invoice_date || null,
-      invoice_amount: form.invoice_amount !== '' ? parseFloat(form.invoice_amount) : null,
+      invoice_amount: entry?.gross_amount ?? null,
       payment_status: form.payment_status,
       payment_received_date: form.payment_received_date || null,
       payment_method: form.payment_method || null,
       payment_notes: form.payment_notes || null,
       you_received: form.you_received,
       you_received_date: form.you_received_date || null,
-      amount_received: form.amount_received !== '' ? parseFloat(form.amount_received) : null,
+      amount_received: entry?.gross_amount != null
+        ? parseFloat((entry.gross_amount - (parseFloat(form.processing_fee) || 0)).toFixed(2))
+        : null,
       processing_fee: form.processing_fee !== '' ? parseFloat(form.processing_fee) : 0,
       you_received_notes: form.you_received_notes || null,
       reward_entry_id: entry.entry_id,
@@ -452,7 +452,7 @@ function RewardInvoiceForm({ entry, onUpdated }) {
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">Amount ($)</label>
-          <input className="form-input" type="number" step="0.01" value={form.invoice_amount} onChange={e => setForm(f => ({ ...f, invoice_amount: e.target.value }))} />
+          <div className="form-input" style={{ background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'default' }}>{entry?.gross_amount != null ? fmtMoney(entry.gross_amount) : '—'}</div>
         </div>
         <div className="form-group">
           <label className="form-label">Status</label>
@@ -495,13 +495,15 @@ function RewardInvoiceForm({ entry, onUpdated }) {
               <input className="form-input" type="date" value={form.you_received_date} onChange={e => setForm(f => ({ ...f, you_received_date: e.target.value }))} />
             </div>
             <div className="form-group">
-              <label className="form-label">Amount Received ($)</label>
-              <input className="form-input" type="number" step="0.01" value={form.amount_received} onChange={e => setForm(f => ({ ...f, amount_received: e.target.value }))} />
+              <label className="form-label">Processing Fee ($)</label>
+              <input className="form-input" type="number" step="0.01" value={form.processing_fee} onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
             </div>
           </div>
           <div className="form-group">
-            <label className="form-label">Processing Fee ($)</label>
-            <input className="form-input" type="number" step="0.01" value={form.processing_fee} onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
+            <label className="form-label">Net Received</label>
+            <div className="form-input" style={{ background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'default' }}>
+              {entry?.gross_amount != null ? fmtMoney(entry.gross_amount - (parseFloat(form.processing_fee) || 0)) : '—'}
+            </div>
           </div>
         </>
       )}
@@ -621,11 +623,18 @@ function RewardPayoutForm({ entry, onUpdated }) {
     }
     if (!payoutId) { setError('Failed to save payout.'); setSaving(false); return; }
 
-    for (const sf of splitForms) {
-      const amt = sf.amount_override !== undefined && sf.amount_override !== ''
+    const amounts = splitForms.map(sf =>
+      sf.amount_override !== undefined && sf.amount_override !== ''
         ? parseFloat(parseFloat(sf.amount_override).toFixed(2))
-        : payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null;
-      const sp = { payout_id: payoutId, destination_id: sf.destination_id, percentage: parseFloat(sf.percentage), amount: amt, split_status: sf.split_status, sent_date: sf.sent_date || null, cleared_date: sf.cleared_date || null, reference: sf.reference || null };
+        : payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null
+    );
+    if (payoutAmt && amounts.length > 1 && amounts.every(a => a !== null)) {
+      const sumRest = amounts.slice(0, -1).reduce((s, a) => s + a, 0);
+      amounts[amounts.length - 1] = parseFloat((payoutAmt - sumRest).toFixed(2));
+    }
+    for (let i = 0; i < splitForms.length; i++) {
+      const sf = splitForms[i];
+      const sp = { payout_id: payoutId, destination_id: sf.destination_id, percentage: parseFloat(sf.percentage), amount: amounts[i], split_status: sf.split_status, sent_date: sf.sent_date || null, cleared_date: sf.cleared_date || null, reference: sf.reference || null };
       if (sf.id) await supabase.from('payout_splits').update(sp).eq('id', sf.id);
       else await supabase.from('payout_splits').insert(sp);
     }

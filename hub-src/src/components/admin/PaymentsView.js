@@ -327,16 +327,12 @@ function InvoiceForm({ invoice, row, onUpdated }) {
     you_received: invoice?.you_received ?? false,
     you_received_date: invoice?.you_received_date || '',
     you_received_notes: invoice?.you_received_notes || '',
-    amount_received: invoice?.amount_received ?? '',
     processing_fee: invoice?.processing_fee ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [receiptPath, setReceiptPath] = useState(invoice?.receipt_path || null);
   const [receiptName, setReceiptName] = useState(invoice?.receipt_name || null);
-
-  const delta = form.amount_received !== '' && form.invoice_amount !== ''
-    ? parseFloat(form.amount_received) - parseFloat(form.invoice_amount) : null;
 
   const inKind = isInKind(form.payment_method);
 
@@ -346,7 +342,6 @@ function InvoiceForm({ invoice, row, onUpdated }) {
     if (form.payment_received_date && !isValidDateString(form.payment_received_date)) errors.push('Agency paid date is not a valid date.');
     if (!inKind && form.you_received_date && !isValidDateString(form.you_received_date)) errors.push('Date cleared is not a valid date.');
     if (form.invoice_amount !== '' && !isValidNumber(form.invoice_amount)) errors.push('Invoice amount must be a number.');
-    if (!inKind && form.amount_received !== '' && !isValidNumber(form.amount_received)) errors.push('Amount received must be a number.');
     if (!inKind && form.processing_fee !== '' && !isValidNumber(form.processing_fee)) errors.push('Processing fee must be a number.');
     if (errors.length) { alert(errors.join('\n')); return; }
     setSaving(true);
@@ -361,7 +356,9 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       you_received: inKind ? false : form.you_received,
       you_received_date: inKind ? null : (form.you_received_date || null),
       you_received_notes: inKind ? null : (form.you_received_notes || null),
-      amount_received: inKind ? null : (form.amount_received !== '' ? parseFloat(form.amount_received) : null),
+      amount_received: inKind ? null : (form.invoice_amount !== ''
+        ? parseFloat((parseFloat(form.invoice_amount) - (parseFloat(form.processing_fee) || 0)).toFixed(2))
+        : null),
       processing_fee: inKind ? 0 : (form.processing_fee !== '' ? parseFloat(form.processing_fee) : 0),
     };
     if (invoice) {
@@ -492,28 +489,16 @@ function InvoiceForm({ invoice, row, onUpdated }) {
                   <input className="form-input" type="date" value={form.you_received_date} onChange={e => setForm(f => ({ ...f, you_received_date: e.target.value }))} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Amount Received ($)</label>
-                  <input className="form-input" type="number" step="0.01" value={form.amount_received}
-                    onChange={e => setForm(f => ({ ...f, amount_received: e.target.value }))}
-                    placeholder={form.invoice_amount || ''} />
+                  <label className="form-label">Processing Fee ($)</label>
+                  <input className="form-input" type="number" step="0.01" value={form.processing_fee}
+                    onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
                 </div>
               </div>
-              {delta !== null && Math.abs(delta) > 0.01 && (
-                <div style={{
-                  padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 12,
-                  background: delta < 0 ? 'rgba(255,156,58,0.08)' : 'rgba(74,223,138,0.08)',
-                  border: `1px solid ${delta < 0 ? 'rgba(255,156,58,0.25)' : 'rgba(74,223,138,0.25)'}`,
-                  color: delta < 0 ? 'var(--orange)' : 'var(--green)',
-                }}>
-                  {delta < 0
-                    ? `${fmtMoney(Math.abs(delta))} less than invoiced — record processing fee below`
-                    : `${fmtMoney(delta)} more than invoiced`}
-                </div>
-              )}
               <div className="form-group">
-                <label className="form-label">Processing Fee ($)</label>
-                <input className="form-input" type="number" step="0.01" value={form.processing_fee}
-                  onChange={e => setForm(f => ({ ...f, processing_fee: e.target.value }))} placeholder="0.00" />
+                <label className="form-label">Net Received</label>
+                <div className="form-input" style={{ background: 'var(--surface)', color: 'var(--text-muted)', cursor: 'default' }}>
+                  {form.invoice_amount !== '' ? fmtMoney(parseFloat(form.invoice_amount) - (parseFloat(form.processing_fee) || 0)) : '—'}
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Notes</label>
@@ -635,15 +620,22 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
 
     if (!payoutId) { setError('Failed to save payout record.'); setSaving(false); return; }
 
-    for (const sf of splitForms) {
-      const amt = sf.amount_override !== undefined && sf.amount_override !== ''
+    const amounts = splitForms.map(sf =>
+      sf.amount_override !== undefined && sf.amount_override !== ''
         ? parseFloat(parseFloat(sf.amount_override).toFixed(2))
-        : payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null;
+        : payoutAmt ? parseFloat((payoutAmt * parseFloat(sf.percentage) / 100).toFixed(2)) : null
+    );
+    if (payoutAmt && amounts.length > 1 && amounts.every(a => a !== null)) {
+      const sumRest = amounts.slice(0, -1).reduce((s, a) => s + a, 0);
+      amounts[amounts.length - 1] = parseFloat((payoutAmt - sumRest).toFixed(2));
+    }
+    for (let i = 0; i < splitForms.length; i++) {
+      const sf = splitForms[i];
       const sp = {
         payout_id: payoutId,
         destination_id: sf.destination_id,
         percentage: parseFloat(sf.percentage),
-        amount: amt,
+        amount: amounts[i],
         split_status: sf.split_status,
         sent_date: sf.sent_date || null,
         cleared_date: sf.cleared_date || null,
