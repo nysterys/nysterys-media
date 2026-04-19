@@ -13,27 +13,180 @@ function lastMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function periodLabel(p) {
-  if (p === 'all') return 'All time';
-  if (p === 'ytd') return 'Year to date';
-  return fmtMonth(p);
+function currentQuarterStart() {
+  const now = new Date();
+  const q = Math.floor(now.getMonth() / 3);
+  return new Date(now.getFullYear(), q * 3, 1);
 }
 
-function buildPeriodOptions(months) {
-  const opts = [
-    { value: 'all', label: 'All time' },
-    { value: 'ytd', label: 'Year to date' },
-  ];
-  months.forEach(m => opts.push({ value: m, label: fmtMonth(m) }));
-  return opts;
+function lastQuarterRange() {
+  const now = new Date();
+  const q = Math.floor(now.getMonth() / 3);
+  const startMonth = q === 0 ? 9 : (q - 1) * 3;
+  const startYear  = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const start = new Date(startYear, startMonth, 1);
+  const end   = new Date(startYear, startMonth + 3, 0);
+  return { start, end };
 }
 
 function inPeriod(dateStr, period) {
   if (!dateStr) return period === 'all';
   if (period === 'all') return true;
-  if (period === 'ytd') return dateStr.startsWith(String(new Date().getFullYear()));
-  if (period === 'lastyear') return dateStr.startsWith(String(new Date().getFullYear() - 1));
-  return dateStr.startsWith(period);
+  const d = dateStr.slice(0, 10);
+  if (period === 'ytd') return d >= `${new Date().getFullYear()}-01-01`;
+  if (period === 'lastyear') return d.startsWith(String(new Date().getFullYear() - 1));
+  if (period === 'qtd') return d >= currentQuarterStart().toISOString().slice(0, 10);
+  if (period === 'lastq') {
+    const { start, end } = lastQuarterRange();
+    return d >= start.toISOString().slice(0, 10) && d <= end.toISOString().slice(0, 10);
+  }
+  return d.startsWith(period);
+}
+
+function buildPeriodOptions(months) {
+  return [
+    { value: 'all',      label: 'All time' },
+    { value: 'ytd',      label: 'Year to date' },
+    { value: 'qtd',      label: 'Quarter to date' },
+    { value: 'lastq',    label: 'Last quarter' },
+    { value: 'lastyear', label: 'Last year' },
+    ...months.map(m => ({ value: m, label: fmtMonth(m) })),
+  ];
+}
+
+// ── Financial summary table ────────────────────────────────────────────────
+function FinancialTable({ invoices, payouts, rewards, period, isAdmin }) {
+  // Campaign row
+  const filtInv = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, period));
+  const filtPay = payouts.filter(p => {
+    const inv = invoices.find(i => i.campaign_id === p.campaign_id);
+    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
+  });
+
+  const cashInv    = filtInv.filter(i => !isInKind(i.payment_method));
+  const contracted = cashInv.reduce((s, i) => s + (i.invoice_amount || 0), 0);
+  const received   = cashInv.filter(i => i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
+  const pendReceipt= cashInv.filter(i => ['Not Invoiced','Invoiced','Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
+  const paidOut    = filtPay.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
+  const pendPayout = filtPay.filter(p => p.payout_status !== 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
+  const fees       = cashInv.reduce((s, i) => s + (i.processing_fee || 0), 0);
+  const inKind     = invoices.filter(i => isInKind(i.payment_method)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
+
+  // Rewards grouped by platform+program
+  const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
+  const rewardGroups = Object.values(filtRewards.reduce((groups, e) => {
+    const key = `${e.platform_name || 'Platform'}||${e.program_name}`;
+    if (!groups[key]) groups[key] = { platform: e.platform_name || 'Platform', program: e.program_name, entries: [] };
+    groups[key].entries.push(e);
+    return groups;
+  }, {}));
+
+  const cellStyle = { padding: '12px 14px', verticalAlign: 'middle' };
+  const numStyle  = (color) => ({ ...cellStyle, fontWeight: 600, color: color || 'var(--text)', textAlign: 'right', whiteSpace: 'nowrap' });
+  const dimStyle  = { ...cellStyle, color: 'var(--text-muted)', textAlign: 'right' };
+  const labelStyle = { ...cellStyle, fontWeight: 600, fontSize: 13 };
+  const subStyle  = { fontSize: 10, color: 'var(--text-muted)', fontWeight: 400, display: 'block', marginTop: 2, letterSpacing: 0.3 };
+
+  function Money({ v, color, dim }) {
+    if (!v || v === 0) return <span style={{ color: 'var(--text-dim)' }}>—</span>;
+    return <span style={{ color: color || (dim ? 'var(--text-muted)' : 'var(--text)') }}>{fmtMoney(v)}</span>;
+  }
+
+  const thStyle = {
+    padding: '9px 14px',
+    fontSize: 9,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    color: 'var(--text-dim)',
+    textAlign: 'right',
+    borderBottom: '1px solid var(--border)',
+    whiteSpace: 'nowrap',
+  };
+  const thFirst = { ...thStyle, textAlign: 'left' };
+
+  return (
+    <div style={{ border: '1px solid var(--border2)', borderRadius: 8, overflow: 'hidden', marginBottom: 24 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: 'var(--surface2)' }}>
+            <th style={thFirst}>Source</th>
+            <th style={thStyle}>Contracted / Gross</th>
+            <th style={thStyle}>{isAdmin ? 'You Received' : 'Agency Paid'}</th>
+            <th style={thStyle}>Pending Receipt</th>
+            <th style={thStyle}>Paid to {isAdmin ? 'Creators' : 'Me'}</th>
+            <th style={thStyle}>Pending Payout</th>
+            <th style={thStyle}>Fees</th>
+            <th style={thStyle}>In-Kind FMV</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* Campaign row */}
+          <tr style={{ borderBottom: rewardGroups.length > 0 ? '1px solid var(--border)' : 'none', background: 'var(--surface)' }}>
+            <td style={labelStyle}>
+              Campaign Payments
+              <span style={subStyle}>Brand deals across all creators</span>
+            </td>
+            <td style={numStyle()}><Money v={contracted} /></td>
+            <td style={numStyle('var(--green)')}><Money v={received} color="var(--green)" /></td>
+            <td style={numStyle('var(--orange)')}><Money v={pendReceipt} color="var(--orange)" /></td>
+            <td style={numStyle('var(--accent)')}><Money v={paidOut} color="var(--accent)" /></td>
+            <td style={numStyle('var(--orange)')}><Money v={pendPayout} color="var(--orange)" /></td>
+            <td style={numStyle('var(--red)')}><Money v={fees} color="var(--red)" /></td>
+            <td style={{ ...dimStyle, fontStyle: 'italic' }}><Money v={inKind} dim /></td>
+          </tr>
+
+          {/* Reward program rows */}
+          {rewardGroups.map((g, i) => {
+            const gross     = g.entries.reduce((s, e) => s + (e.gross_amount || 0), 0);
+            const recvd     = g.entries.filter(e => e.you_received).reduce((s, e) => s + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0);
+            const pendRcpt  = g.entries.filter(e => !e.you_received).reduce((s, e) => s + (e.gross_amount || 0), 0);
+            const paid      = g.entries.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
+            const pend      = g.entries.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
+            const rgFees    = g.entries.reduce((s, e) => s + (e.processing_fee || 0), 0);
+            const isLast    = i === rewardGroups.length - 1;
+            return (
+              <tr key={`${g.platform}-${g.program}`} style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)', background: i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)' }}>
+                <td style={labelStyle}>
+                  {g.platform}
+                  <span style={subStyle}>{g.program}</span>
+                </td>
+                <td style={numStyle()}><Money v={gross} /></td>
+                <td style={numStyle('var(--green)')}><Money v={recvd} color="var(--green)" /></td>
+                <td style={numStyle('var(--orange)')}><Money v={pendRcpt} color="var(--orange)" /></td>
+                <td style={numStyle('var(--accent)')}><Money v={paid} color="var(--accent)" /></td>
+                <td style={numStyle('var(--orange)')}><Money v={pend} color="var(--orange)" /></td>
+                <td style={numStyle('var(--red)')}><Money v={rgFees} color="var(--red)" /></td>
+                <td style={dimStyle}>—</td>
+              </tr>
+            );
+          })}
+
+          {/* Totals row */}
+          {rewardGroups.length > 0 && (() => {
+            const tGross    = contracted + rewardGroups.reduce((s, g) => s + g.entries.reduce((ss, e) => ss + (e.gross_amount || 0), 0), 0);
+            const tRecvd    = received   + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.you_received).reduce((ss, e) => ss + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0), 0);
+            const tPendRcpt = pendReceipt+ rewardGroups.reduce((s, g) => s + g.entries.filter(e => !e.you_received).reduce((ss, e) => ss + (e.gross_amount || 0), 0), 0);
+            const tPaid     = paidOut    + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.payout_status === 'Paid').reduce((ss, e) => ss + (e.payout_amount || 0), 0), 0);
+            const tPend     = pendPayout + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.payout_status !== 'Paid').reduce((ss, e) => ss + (e.gross_amount || 0), 0), 0);
+            const tFees     = fees       + rewardGroups.reduce((s, g) => s + g.entries.reduce((ss, e) => ss + (e.processing_fee || 0), 0), 0);
+            return (
+              <tr style={{ borderTop: '2px solid var(--border2)', background: 'var(--surface2)' }}>
+                <td style={{ ...labelStyle, color: 'var(--text-muted)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' }}>Total</td>
+                <td style={numStyle()}><Money v={tGross} /></td>
+                <td style={numStyle('var(--green)')}><Money v={tRecvd} color="var(--green)" /></td>
+                <td style={numStyle('var(--orange)')}><Money v={tPendRcpt} color="var(--orange)" /></td>
+                <td style={numStyle('var(--accent)')}><Money v={tPaid} color="var(--accent)" /></td>
+                <td style={numStyle('var(--orange)')}><Money v={tPend} color="var(--orange)" /></td>
+                <td style={numStyle('var(--red)')}><Money v={tFees} color="var(--red)" /></td>
+                <td style={{ ...dimStyle, fontStyle: 'italic' }}><Money v={inKind} dim /></td>
+              </tr>
+            );
+          })()}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function AdminOverview({ setActiveView }) {
@@ -58,10 +211,10 @@ export default function AdminOverview({ setActiveView }) {
       supabase.from('reward_payout_summary').select('*').order('period_month', { ascending: false }),
     ]);
 
-    const campaigns = campaignsRes.data || [];
-    const invoices  = invoicesRes.data || [];
-    const payouts   = payoutsRes.data || [];
-    const rewardRows = rewardsRes.data || [];
+    const campaigns  = campaignsRes.data || [];
+    const invoices   = invoicesRes.data  || [];
+    const payouts    = payoutsRes.data   || [];
+    const rewardRows = rewardsRes.data   || [];
 
     const active = campaigns.filter(c => c.status === 'Active');
 
@@ -107,60 +260,9 @@ export default function AdminOverview({ setActiveView }) {
 
   const { campaigns, invoices, payouts, active, needsAttentionGrouped, agencyPending, payoutsPending } = data;
 
-  // Campaign KPIs filtered by period
-  const filtInvoices = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, period));
-  const filtPayouts  = payouts.filter(p => {
-    const inv = invoices.find(i => i.campaign_id === p.campaign_id);
-    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
-  });
-  const filtCampaigns = campaigns.filter(c => {
-    const inv = c.invoices?.[0];
-    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
-  });
-
-  const totalContracted = period === 'all'
-    ? campaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.contracted_rate || 0), 0)
-    : filtCampaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.contracted_rate || 0), 0);
-  const totalReceived   = filtInvoices.filter(i => !isInKind(i.payment_method) && i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
-  const totalPaidOut    = filtPayouts.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
-  const totalPending    = invoices.filter(i => !isInKind(i.payment_method) && ['Not Invoiced', 'Invoiced', 'Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
-  const totalFeesCampaign = filtInvoices.filter(i => !isInKind(i.payment_method)).reduce((s, i) => s + (i.processing_fee || 0), 0);
-  // Use separately-fetched invoices for in-kind (nested subquery may be empty if no invoice row)
-  const totalInKind     = invoices.filter(i => isInKind(i.payment_method)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
-
-  // Reward KPIs filtered by period
-  const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
-  const rTotalGross    = filtRewards.reduce((s, e) => s + (e.gross_amount || 0), 0);
-  const rTotalReceived = filtRewards.filter(e => e.you_received).reduce((s, e) => s + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0);
-  const rTotalPaidOut  = filtRewards.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
-  const rTotalPending  = filtRewards.filter(e => e.payout_status !== 'Paid').reduce((s, e) => s + (e.gross_amount || 0), 0);
-  const rTotalFees     = filtRewards.reduce((s, e) => s + (e.processing_fee || 0), 0);
-
-  // Month lists for dropdowns
   const campaignMonths = [...new Set(invoices.map(i => (i.invoice_date || i.you_received_date)?.slice(0, 7)).filter(Boolean))].sort().reverse();
   const rewardMonths   = [...new Set(rewards.map(e => e.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
-
-  const tileGroupStyle = {
-    border: '1px solid var(--border2)',
-    borderRadius: 8,
-    padding: '14px 14px 2px',
-    marginBottom: 20,
-  };
-
-  const groupHeaderStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  };
-
-  const groupLabelStyle = {
-    fontSize: 9,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    color: 'var(--text-dim)',
-  };
+  const allMonths      = [...new Set([...campaignMonths, ...rewardMonths])].sort().reverse();
 
   return (
     <div className="page">
@@ -170,39 +272,12 @@ export default function AdminOverview({ setActiveView }) {
           <div className="page-subtitle">All campaigns across Kym and Mys</div>
         </div>
         <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={period} onChange={e => setPeriod(e.target.value)}>
-          {buildPeriodOptions([...new Set([...campaignMonths, ...rewardMonths])].sort().reverse()).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {buildPeriodOptions(allMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
-      {/* Campaign payment tiles */}
-      <div style={tileGroupStyle}>
-        <div style={groupHeaderStyle}>
-          <div style={groupLabelStyle}>CAMPAIGN PAYMENTS</div>
-        </div>
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(totalContracted)}</div><div className="stat-label">Total Contracted</div></div>
-          <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(totalReceived)}</div><div className="stat-label">Total Received</div></div>
-          <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(totalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
-          <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(totalPending)}</div><div className="stat-label">Pending from Agencies</div></div>
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: totalFeesCampaign > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(totalFeesCampaign)}</div><div className="stat-label">Fees Paid</div></div>
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: 'var(--text-muted)', fontStyle: 'italic' }}>{fmtMoney(totalInKind)}</div><div className="stat-label">In-Kind FMV</div></div>
-        </div>
-      </div>
-
-      {/* Rewards tiles */}
-      <div style={tileGroupStyle}>
-        <div style={groupHeaderStyle}>
-          <div style={groupLabelStyle}>PLATFORM REWARDS</div>
-        </div>
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(6, 1fr)', marginBottom: 12 }}>
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18 }}>{fmtMoney(rTotalGross)}</div><div className="stat-label">Gross Earned</div></div>
-          <div className="stat-card"><div className="stat-value stat-green" style={{ fontSize: 18 }}>{fmtMoney(rTotalReceived)}</div><div className="stat-label">You Received</div></div>
-          <div className="stat-card"><div className="stat-value stat-accent" style={{ fontSize: 18 }}>{fmtMoney(rTotalPaidOut)}</div><div className="stat-label">Paid to Creators</div></div>
-          <div className="stat-card"><div className="stat-value stat-orange" style={{ fontSize: 18 }}>{fmtMoney(rTotalPending)}</div><div className="stat-label">Pending Payout</div></div>
-          <div className="stat-card"><div className="stat-value" style={{ fontSize: 18, color: rTotalFees > 0 ? 'var(--red)' : 'var(--text-muted)' }}>{fmtMoney(rTotalFees)}</div><div className="stat-label">Fees Paid</div></div>
-          <div className="stat-card" style={{ visibility: 'hidden' }}></div>
-        </div>
-      </div>
+      {/* Financial summary table */}
+      <FinancialTable invoices={invoices} payouts={payouts} rewards={rewards} period={period} isAdmin={true} />
 
       {/* Needs attention */}
       {needsAttentionGrouped.length > 0 && (
@@ -260,7 +335,9 @@ export default function AdminOverview({ setActiveView }) {
                       <td><div style={{ fontWeight: 500 }}>{c.campaign_name}</div><div className="text-muted text-xs">{c.brand_name}</div></td>
                       <td>{c.creator?.creator_name || c.creator?.full_name || '—'}</td>
                       <td>{c.agency?.name || <span className="text-muted">—</span>}</td>
-                      <td>{total > 0 ? `${posted}/${total}` : <span className="text-muted">—</span>}</td>
+                      <td style={{ fontWeight: 500, textAlign: 'center' }}>
+                        {total > 0 ? <span style={{ color: posted === total ? 'var(--green)' : 'var(--text)' }}>{posted}/{total}</span> : <span className="text-muted">—</span>}
+                      </td>
                       <td>{next ? <span style={{ fontWeight: 500 }}>{fmtDate(next.contracted_post_date)}</span> : <span className="text-muted">—</span>}</td>
                       <td>
                         {total > 0 ? (
