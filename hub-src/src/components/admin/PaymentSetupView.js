@@ -266,8 +266,9 @@ export default function PaymentSetupView() {
     setTerms(tRes.data || []);
     const tUsage = {};
     for (const a of (aRes.data || [])) {
-      if (!a.payment_terms) continue;
-      tUsage[a.payment_terms] = (tUsage[a.payment_terms] || 0) + 1;
+      const key = (a.payment_terms || '').trim().toLowerCase();
+      if (!key) continue;
+      tUsage[key] = (tUsage[key] || 0) + 1;
     }
     setTermsUsage(tUsage);
     setLoading(false);
@@ -324,7 +325,7 @@ export default function PaymentSetupView() {
 
       {/* ── Payment Methods ── */}
       <SectionHeader first title="Payment Methods" subtitle="How agencies pay invoices"
-        action={<button className="btn btn-ghost btn-sm" onClick={() => setShowMethodModal(true)}>+ Add Method</button>} />
+        action={<button className="btn btn-ghost btn-sm" style={{ color: 'var(--white)' }} onClick={() => setShowMethodModal(true)}>+ Add Method</button>} />
       {methods.length === 0 ? (
         <div className="empty-state" style={{ marginBottom: 32 }}>
           <div className="empty-state-title">No payment methods yet</div>
@@ -381,8 +382,7 @@ export default function PaymentSetupView() {
       )}
 
       {/* ── Payout Destinations ── */}
-      <SectionHeader title="Payout Destinations" subtitle="Creator bank accounts and investment accounts"
-        action={<button className="btn btn-ghost btn-sm" onClick={() => { setEditingDest(null); setShowDestModal(true); }}>+ Add Destination</button>} />
+      <SectionHeader title="Payout Destinations" subtitle="Creator bank accounts and investment accounts" />
       {destinations.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-title">No destinations configured</div>
@@ -401,7 +401,7 @@ export default function PaymentSetupView() {
                     {(creator.creator_name || creator.full_name).toUpperCase()}
                   </span>
                   <div style={{ marginLeft: 'auto' }}>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }}
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--white)' }}
                       onClick={() => { setEditingDest(null); setShowDestModal(true); }}>
                       + Add Destination
                     </button>
@@ -473,7 +473,7 @@ export default function PaymentSetupView() {
 
       {/* ── Payment Terms ── */}
       <SectionHeader title="Payment Terms" subtitle="Reusable net terms assigned to agencies"
-        action={<button className="btn btn-ghost btn-sm" onClick={() => { setEditingTerm(null); setShowTermModal(true); }}>+ Add Term</button>} />
+        action={<button className="btn btn-ghost btn-sm" style={{ color: 'var(--white)' }} onClick={() => { setEditingTerm(null); setShowTermModal(true); }}>+ Add Term</button>} />
       {terms.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-title">No payment terms yet</div>
@@ -496,7 +496,7 @@ export default function PaymentSetupView() {
             </thead>
             <tbody>
               {terms.map(t => {
-                const count = termsUsage[t.name] || 0;
+                const count = termsUsage[(t.name || '').trim().toLowerCase()] || 0;
                 return (
                   <tr key={t.id} style={{ opacity: t.is_active ? 1 : 0.5 }}>
                     <td />
