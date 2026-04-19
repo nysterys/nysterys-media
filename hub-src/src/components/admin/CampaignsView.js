@@ -389,6 +389,7 @@ export default function CampaignsView() {
                   Platforms
                   <ColFilterBtn col="platform" options={platformOptions} label="Platforms" />
                 </th>
+                <th onClick={() => toggleSort('posts')} style={{ cursor: 'pointer', userSelect: 'none' }}>Posts<SortIcon col="posts" /></th>
                 <th onClick={() => toggleSort('post_date')} style={{ cursor: 'pointer', userSelect: 'none' }}>Post Date<SortIcon col="post_date" /></th>
                 <th onClick={() => toggleSort('rate')} style={{ cursor: 'pointer', userSelect: 'none' }}>Rate<SortIcon col="rate" /></th>
                 <th onClick={() => toggleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>Status<SortIcon col="status" /></th>
@@ -431,6 +432,15 @@ export default function CampaignsView() {
                           ));
                         })()}
                       </div>
+                    </td>
+                    <td style={{ fontWeight: 500, textAlign: 'center' }}>
+                      {(() => {
+                        const dels = c.campaign_deliverables || [];
+                        const total = dels.length;
+                        const posted = dels.filter(d => d.draft_status === 'Posted').length;
+                        if (total === 0) return <span className="text-muted">—</span>;
+                        return <span style={{ color: posted === total ? 'var(--green)' : 'var(--text)' }}>{posted}/{total}</span>;
+                      })()}
                     </td>
                     <td>{fmtDate(earliestPost)}</td>
                     <td>
