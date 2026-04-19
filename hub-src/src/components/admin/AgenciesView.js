@@ -3,22 +3,48 @@ import { supabase } from '../../lib/supabase';
 import { isValidEmail } from '../../utils/format';
 
 export default function AgenciesView() {
-  const [agencies, setAgencies] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [agencies, setAgencies]   = useState([]);
+  const [statsMap, setStatsMap]   = useState({});  // agencyId → { creatorId → { name, campaigns, posts } }
+  const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing]     = useState(null);
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  async function fetch() {
-    const { data } = await supabase.from('agencies').select('*').order('name');
-    setAgencies(data || []);
+  async function fetchAll() {
+    const [aRes, cRes] = await Promise.all([
+      supabase.from('agencies').select('*').order('name'),
+      supabase.from('campaigns').select(
+        'id, agency_id, creator_profile_id, ' +
+        'creator:profiles!campaigns_creator_profile_id_fkey(creator_name, full_name), ' +
+        'campaign_deliverables(id)'
+      ),
+    ]);
+    setAgencies(aRes.data || []);
+
+    // Build statsMap: agencyId → { creatorId → { name, campaigns, posts } }
+    const map = {};
+    for (const c of (cRes.data || [])) {
+      if (!c.agency_id) continue;
+      if (!map[c.agency_id]) map[c.agency_id] = {};
+      const cid = c.creator_profile_id || 'unknown';
+      if (!map[c.agency_id][cid]) {
+        map[c.agency_id][cid] = {
+          name: c.creator?.creator_name || c.creator?.full_name || 'Unknown',
+          campaigns: 0,
+          posts: 0,
+        };
+      }
+      map[c.agency_id][cid].campaigns += 1;
+      map[c.agency_id][cid].posts += (c.campaign_deliverables || []).length;
+    }
+    setStatsMap(map);
     setLoading(false);
   }
 
   async function toggleActive(a) {
     await supabase.from('agencies').update({ is_active: !a.is_active }).eq('id', a.id);
-    fetch();
+    fetchAll();
   }
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
@@ -41,27 +67,63 @@ export default function AgenciesView() {
         </div>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: 90 }} />
+              <col />
+              <col style={{ width: 90 }} />
+              <col style={{ width: '18%' }} />
+            </colgroup>
             <thead>
-              <tr><th>Name</th><th>Contact</th><th>Email</th><th>Payment Terms</th><th>Notes</th><th>Status</th><th></th></tr>
+              <tr><th>Name</th><th>Contact</th><th>Email</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
-              {agencies.map(a => (
-                <tr key={a.id}>
-                  <td style={{ fontWeight: 500 }}>{a.name}</td>
-                  <td>{a.contact_name || <span className="text-muted">—</span>}</td>
-                  <td>{a.email || <span className="text-muted">—</span>}</td>
-                  <td>{a.payment_terms}</td>
-                  <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.notes || <span className="text-muted">—</span>}</td>
-                  <td><span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>{a.is_active ? 'Active' : 'Inactive'}</span></td>
-                  <td>
-                    <div className="flex gap-8">
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(a); setShowModal(true); }}>Edit</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(a)}>{a.is_active ? 'Deactivate' : 'Activate'}</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {agencies.map(a => {
+                const creatorStats = Object.values(statsMap[a.id] || {});
+                const hasStats = creatorStats.length > 0;
+                return (
+                  <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
+                    <td style={{ fontWeight: 500 }}>
+                      {a.website ? (
+                        <a href={a.website} target="_blank" rel="noreferrer" className="link">{a.name}</a>
+                      ) : a.name}
+                    </td>
+                    <td>{a.contact_name || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 12 }}>{a.email || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
+                    <td>
+                      {hasStats ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {creatorStats.map(s => (
+                            <div key={s.name} style={{ fontSize: 12 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-muted)', marginRight: 6 }}>{s.name}</span>
+                              <span style={{ color: 'var(--text-muted)' }}>
+                                {s.campaigns} campaign{s.campaigns !== 1 ? 's' : ''} · {s.posts} post{s.posts !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                        {a.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex gap-8">
+                        <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(a); setShowModal(true); }}>Edit</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(a)}>{a.is_active ? 'Deactivate' : 'Activate'}</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -71,7 +133,7 @@ export default function AgenciesView() {
         <AgencyModal
           agency={editing}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); fetch(); }}
+          onSaved={() => { setShowModal(false); fetchAll(); }}
         />
       )}
     </div>
@@ -80,15 +142,23 @@ export default function AgenciesView() {
 
 function AgencyModal({ agency, onClose, onSaved }) {
   const [form, setForm] = useState({
-    name: agency?.name || '',
-    contact_name: agency?.contact_name || '',
-    email: agency?.email || '',
-    phone: agency?.phone || '',
+    name:          agency?.name          || '',
+    contact_name:  agency?.contact_name  || '',
+    email:         agency?.email         || '',
+    phone:         agency?.phone         || '',
+    website:       agency?.website       || '',
     payment_terms: agency?.payment_terms || 'Net 30',
-    notes: agency?.notes || '',
+    notes:         agency?.notes         || '',
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]   = useState('');
+
+  function normalizeUrl(url) {
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
+    return trimmed;
+  }
 
   async function save() {
     const errors = [];
@@ -97,10 +167,11 @@ function AgencyModal({ agency, onClose, onSaved }) {
     if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
+    const payload = { ...form, website: normalizeUrl(form.website) };
     if (agency) {
-      await supabase.from('agencies').update(form).eq('id', agency.id);
+      await supabase.from('agencies').update(payload).eq('id', agency.id);
     } else {
-      await supabase.from('agencies').insert(form);
+      await supabase.from('agencies').insert(payload);
     }
     setSaving(false);
     onSaved();
@@ -134,6 +205,12 @@ function AgencyModal({ agency, onClose, onSaved }) {
               <label className="form-label">Phone</label>
               <input className="form-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
             </div>
+            <div className="form-group">
+              <label className="form-label">Website</label>
+              <input className="form-input" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="ytkmedia.com" />
+            </div>
+          </div>
+          <div className="form-row">
             <div className="form-group">
               <label className="form-label">Payment Terms</label>
               <select className="form-select" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
