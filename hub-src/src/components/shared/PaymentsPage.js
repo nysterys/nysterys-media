@@ -9,6 +9,41 @@ const SPLIT_STATUSES  = ['Pending', 'Sent', 'Cleared', 'Failed'];
 
 function isInKind(pm) { return (pm || '').toLowerCase() === 'in kind'; }
 
+function currentQuarterStart() {
+  const now = new Date();
+  return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+}
+function lastQuarterRange() {
+  const now = new Date();
+  const q = Math.floor(now.getMonth() / 3);
+  const sy = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const sm = q === 0 ? 9 : (q - 1) * 3;
+  return {
+    start: new Date(sy, sm, 1).toISOString().slice(0, 10),
+    end:   new Date(sy, sm + 3, 0).toISOString().slice(0, 10),
+  };
+}
+function inPeriod(dateStr, period) {
+  if (period === 'all') return true;
+  if (!dateStr) return false;
+  const d = dateStr.slice(0, 10);
+  if (period === 'ytd')      return d >= `${new Date().getFullYear()}-01-01`;
+  if (period === 'lastyear') return d.startsWith(String(new Date().getFullYear() - 1));
+  if (period === 'qtd')      return d >= currentQuarterStart().toISOString().slice(0, 10);
+  if (period === 'lastq')    { const { start, end } = lastQuarterRange(); return d >= start && d <= end; }
+  return d.startsWith(period);
+}
+function buildPeriodOptions(months) {
+  return [
+    { value: 'all',      label: 'All time' },
+    { value: 'ytd',      label: 'Year to date' },
+    { value: 'qtd',      label: 'Quarter to date' },
+    { value: 'lastq',    label: 'Last quarter' },
+    { value: 'lastyear', label: 'Last year' },
+    ...months.map(m => ({ value: m, label: fmtMonth(m) })),
+  ];
+}
+
 function openPopup(url) {
   if (!url) return;
   const w = 480, h = 720;
@@ -74,7 +109,7 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [agencyFilter,  setAgencyFilter]  = useState('all');
   const [payoutFilter,  setPayoutFilter]  = useState('all');
-  const [monthFilter,   setMonthFilter]   = useState(lastMonth);
+  const [period,        setPeriod]        = useState(lastMonth);
 
   const cashSort = useSortState('invoice_date', 'desc');
   const inkSort  = useSortState('campaign');
@@ -103,7 +138,7 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
     if (isAdmin && creatorFilter !== 'all' && r.creator_profile_id !== creatorFilter) return false;
     if (agencyFilter  !== 'all' && r.agency_payment_status !== agencyFilter) return false;
     if (payoutFilter  !== 'all' && (r.payout_status || 'Pending') !== payoutFilter) return false;
-    if (monthFilter   !== 'all' && r.invoice_date && !r.invoice_date.startsWith(monthFilter)) return false;
+    if (!inPeriod(r.invoice_date, period)) return false;
     return true;
   });
 
@@ -187,12 +222,10 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
         {['all', ...PAYOUT_STATUSES].map(s => (
           <button key={s} className={`filter-chip ${payoutFilter === s ? 'active' : ''}`} onClick={() => setPayoutFilter(s)}>{s === 'all' ? 'All' : s}</button>
         ))}
-        {months.length > 0 && (
-          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All time</option>
-            {months.map(m => <option key={m} value={m}>{fmtMonth(m)}</option>)}
-          </select>
-        )}
+        <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12, marginLeft: 8 }}
+          value={period} onChange={e => setPeriod(e.target.value)}>
+          {buildPeriodOptions(months).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
       </div>
 
       {cashRows.length === 0 && inkRows.length === 0 ? (
