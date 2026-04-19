@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
@@ -175,6 +175,7 @@ export default function CampaignsView() {
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const openCampaignIdRef = useRef(null);
   const [showModal, setShowModal] = useState(false);
   const [detailTab, setDetailTab] = useState('deliverables');
 
@@ -192,8 +193,8 @@ export default function CampaignsView() {
     const [c, a, cr, p, dt, inv] = await Promise.all([
       supabase.from('campaigns').select(`
         *, agency:agencies(name), creator:profiles!campaigns_creator_profile_id_fkey(full_name, creator_name),
-        campaign_deliverables:campaign_deliverables_with_stats(*, platform:platforms(name), deliverable_type:deliverable_types(name),
-          revision_rounds(* , submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name)))
+        campaign_deliverables(*, platform:platforms(name), deliverable_type:deliverable_types(name),
+          revision_rounds(*, submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name)))
       `).order('created_at', { ascending: false }),
       supabase.from('agencies').select('*').eq('is_active', true),
       supabase.from('profiles').select('*').eq('role', 'creator'),
@@ -221,6 +222,20 @@ export default function CampaignsView() {
     setSelectedCampaign(prev => {
       if (!prev) return null;
       return merged.find(camp => camp.id === prev.id) || prev;
+    });
+    // Re-enrich the open campaign's deliverables with TikTok stats
+    if (openCampaignIdRef.current) enrichWithStats(openCampaignIdRef.current);
+  }
+
+  async function enrichWithStats(campaignId) {
+    const { data } = await supabase
+      .from('campaign_deliverables_with_stats')
+      .select('*, platform:platforms(name), deliverable_type:deliverable_types(name), revision_rounds(*, submitted_by_profile:profiles!revision_rounds_submitted_by_fkey(full_name))')
+      .eq('campaign_id', campaignId);
+    if (!data) return;
+    setSelectedCampaign(prev => {
+      if (!prev || prev.id !== campaignId) return prev;
+      return { ...prev, campaign_deliverables: data };
     });
   }
 
@@ -282,8 +297,16 @@ export default function CampaignsView() {
     return 0;
   });
 
-  async function openDetail(c) { setSelectedCampaign(c); setDetailTab('deliverables'); }
-  function closeDetail() { setSelectedCampaign(null); }
+  async function openDetail(c) {
+    openCampaignIdRef.current = c.id;
+    setSelectedCampaign(c);
+    setDetailTab('deliverables');
+    enrichWithStats(c.id);
+  }
+  function closeDetail() {
+    openCampaignIdRef.current = null;
+    setSelectedCampaign(null);
+  }
 
   const fmtDate = safeFmtDate;
   const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
