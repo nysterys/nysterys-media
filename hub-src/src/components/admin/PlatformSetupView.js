@@ -304,15 +304,17 @@ export default function PlatformSetupView() {
                 <div className="table-wrap" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                   <table style={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
-                      <col style={{ width: '30%' }} />
-                      <col style={{ width: '30%' }} />
-                      <col style={{ width: 110 }} />
+                      <col style={{ width: '22%' }} />
                       <col />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: '22%' }} />
                     </colgroup>
                     <thead>
                       <tr>
                         <th>Creator</th>
                         <th>Account</th>
+                        <th></th>
                         <th>Status</th>
                         <th></th>
                       </tr>
@@ -320,7 +322,7 @@ export default function PlatformSetupView() {
                     <tbody>
                       {pAccounts.length === 0 ? (
                         <tr>
-                          <td colSpan={4} style={{ fontSize: 12, color: 'var(--text-muted)' }}>No accounts linked</td>
+                          <td colSpan={5} style={{ fontSize: 12, color: 'var(--text-muted)' }}>No accounts linked</td>
                         </tr>
                       ) : (
                         pAccounts.map(a => {
@@ -340,6 +342,7 @@ export default function PlatformSetupView() {
                                   <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{a.display_name}</span>
                                 )}
                               </td>
+                              <td />
                               <td>
                                 <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
                                   {a.is_active ? 'Active' : 'Inactive'}
@@ -375,15 +378,17 @@ export default function PlatformSetupView() {
               <div className="table-wrap" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <table style={{ tableLayout: 'fixed', width: '100%' }}>
                   <colgroup>
-                    <col style={{ width: '30%' }} />
-                    <col style={{ width: '30%' }} />
-                    <col style={{ width: 110 }} />
+                    <col style={{ width: '22%' }} />
                     <col />
+                    <col style={{ width: 90 }} />
+                    <col style={{ width: 90 }} />
+                    <col style={{ width: '22%' }} />
                   </colgroup>
                   <thead>
                     <tr>
                       <th>Creator</th>
                       <th>Account</th>
+                      <th></th>
                       <th>Status</th>
                       <th></th>
                     </tr>
@@ -404,6 +409,7 @@ export default function PlatformSetupView() {
                               <span>@{a.username}</span>
                             )}
                           </td>
+                          <td />
                           <td>
                             <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
                               {a.is_active ? 'Active' : 'Inactive'}
@@ -442,11 +448,11 @@ export default function PlatformSetupView() {
           <div className="table-wrap">
             <table style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '28%' }} />
+                <col style={{ width: '22%' }} />
                 <col />
                 <col style={{ width: 90 }} />
-                <col style={{ width: 100 }} />
-                <col />
+                <col style={{ width: 90 }} />
+                <col style={{ width: '22%' }} />
               </colgroup>
               <thead>
                 <tr><th>Type</th><th>Description</th><th>Usage</th><th>Status</th><th></th></tr>
@@ -468,9 +474,7 @@ export default function PlatformSetupView() {
                       </td>
                       <td>
                         <div className="flex gap-8">
-                          {count === 0 && (
-                            <button className="btn btn-ghost btn-sm" onClick={() => { setEditingType(t); setShowTypeModal(true); }}>Edit</button>
-                          )}
+                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditingType(t); setShowTypeModal(true); }}>Edit</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => toggleType(t)}>
                             {t.is_active ? 'Deactivate' : 'Activate'}
                           </button>
