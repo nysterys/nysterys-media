@@ -64,8 +64,9 @@ function buildPeriodOptions(months) {
   ];
 }
 
-function isInKind(method) {
-  return (method || '').toLowerCase() === 'in kind';
+function isInKind(method, agencyStatus) {
+  return (method || '').toLowerCase() === 'in kind' ||
+         (method == null && (agencyStatus || '').toLowerCase() === 'in kind');
 }
 
 // ── Financial summary table ───────────────────────────────────────────────────
@@ -75,10 +76,12 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
   // For rows with no date at all, include in 'all' only.
   const filtSummary = summaryRows.filter(r => {
     const dateRef = r.invoice_date || r.payout_date;
-    return inPeriod(dateRef || (period === 'all' ? 'all' : null), period);
+    // Rows with no date are undated/active — always include them
+    if (!dateRef) return true;
+    return inPeriod(dateRef, period);
   });
 
-  const cashRows = filtSummary.filter(r => !isInKind(r.payment_method));
+  const cashRows = filtSummary.filter(r => !isInKind(r.payment_method, r.agency_payment_status));
 
   // Campaign row calculations — mirrors PaymentsView logic exactly
   const contracted  = cashRows.reduce((s, r) => s + (r.contracted_rate || 0), 0);
@@ -90,7 +93,7 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
   const paidOut     = cashRows.filter(r => r.payout_status === 'Paid').reduce((s, r) => s + (r.payout_amount || 0), 0);
   const pendPayout  = cashRows.filter(r => r.payout_status !== 'Paid' && r.payout_status !== 'N/A' && r.you_received).reduce((s, r) => s + (r.payout_amount || r.contracted_rate || 0), 0);
   const fees        = cashRows.reduce((s, r) => s + (r.processing_fee || 0), 0);
-  const inKind      = filtSummary.filter(r => isInKind(r.payment_method)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
+  const inKind      = filtSummary.filter(r => isInKind(r.payment_method, r.agency_payment_status)).reduce((s, r) => s + (r.invoice_amount ?? r.contracted_rate ?? 0), 0);
 
   // Reward rows grouped by platform+program
   const filtRewards = rewardRows.filter(e => inPeriod(e.period_month, period));
