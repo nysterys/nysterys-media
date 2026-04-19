@@ -323,7 +323,8 @@ export default function PaymentSetupView() {
       </div>
 
       {/* ── Payment Methods ── */}
-      <SectionHeader first title="Payment Methods" subtitle="How agencies pay invoices" />
+      <SectionHeader first title="Payment Methods" subtitle="How agencies pay invoices"
+        action={<button className="btn btn-ghost btn-sm" onClick={() => setShowMethodModal(true)}>+ Add Method</button>} />
       {methods.length === 0 ? (
         <div className="empty-state" style={{ marginBottom: 32 }}>
           <div className="empty-state-title">No payment methods yet</div>
@@ -380,7 +381,8 @@ export default function PaymentSetupView() {
       )}
 
       {/* ── Payout Destinations ── */}
-      <SectionHeader title="Payout Destinations" subtitle="Creator bank accounts and investment accounts" />
+      <SectionHeader title="Payout Destinations" subtitle="Creator bank accounts and investment accounts"
+        action={<button className="btn btn-ghost btn-sm" onClick={() => { setEditingDest(null); setShowDestModal(true); }}>+ Add Destination</button>} />
       {destinations.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-title">No destinations configured</div>
@@ -470,7 +472,8 @@ export default function PaymentSetupView() {
       )}
 
       {/* ── Payment Terms ── */}
-      <SectionHeader title="Payment Terms" subtitle="Reusable net terms assigned to agencies" />
+      <SectionHeader title="Payment Terms" subtitle="Reusable net terms assigned to agencies"
+        action={<button className="btn btn-ghost btn-sm" onClick={() => { setEditingTerm(null); setShowTermModal(true); }}>+ Add Term</button>} />
       {terms.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-title">No payment terms yet</div>
@@ -480,21 +483,25 @@ export default function PaymentSetupView() {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
-              <col style={{ width: '30%' }} />
-              <col style={{ width: 120 }} />
+              <col style={{ width: 40 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '18%' }} />
               <col style={{ width: 90 }} />
               <col />
             </colgroup>
             <thead>
-              <tr><th>Term</th><th>Usage</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Term</th><th colSpan={3}>Usage</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {terms.map(t => {
                 const count = termsUsage[t.name] || 0;
                 return (
                   <tr key={t.id} style={{ opacity: t.is_active ? 1 : 0.5 }}>
+                    <td />
                     <td style={{ fontWeight: 500 }}>{t.name}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    <td colSpan={3} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {count > 0 ? `${count} agenc${count !== 1 ? 'ies' : 'y'}` : <span className="text-muted">—</span>}
                     </td>
                     <td>
