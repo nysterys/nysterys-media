@@ -225,8 +225,6 @@ export default function PlatformSetupView() {
     }
   }
 
-  const COL_COUNT = 6;
-
   return (
     <div className="page">
       <div className="page-header">
@@ -247,90 +245,149 @@ export default function PlatformSetupView() {
           <div className="empty-state-text">Add platforms like TikTok, Instagram, YouTube...</div>
         </div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th style={{ width: 32 }}></th>
-                <th>Platform</th>
-                <th>Deliverables</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {platforms.map(p => {
+            const pAccounts = accountsByPlatform[p.id] || [];
+            const delivCount = usageCounts[p.id] || 0;
+            return (
+              <div key={p.id}>
+                {/* Platform header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '2px solid var(--surface2)', opacity: p.is_active ? 1 : 0.6 }}>
+                  <PlatformLogo name={p.name} size={22} />
+                  <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: '0.04em' }}>{p.name.toUpperCase()}</span>
+                  <span className={`badge ${p.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                    {p.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  {delivCount > 0 && (
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                      {delivCount} deliverable{delivCount !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => togglePlatform(p)}>
+                      {p.is_active ? 'Deactivate' : 'Activate'}
+                    </button>
+                    {delivCount === 0 && pAccounts.length === 0 && (
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deletePlatform(p)}>
+                        Delete
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => openLinkAccount(p.name)}>
+                      + Link Account
+                    </button>
+                  </div>
+                </div>
 
-            {platforms.map(p => {
-              const pAccounts = accountsByPlatform[p.id] || [];
-              const delivCount = usageCounts[p.id] || 0;
-              return (
-                <tbody key={p.id}>
-                  {/* Platform row */}
-                  <tr style={{ background: 'var(--surface2)', opacity: p.is_active ? 1 : 0.5 }}>
-                    <td style={{ paddingRight: 0 }}><PlatformLogo name={p.name} size={24} /></td>
-                    <td style={{ fontWeight: 600 }}>{p.name}</td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                      {delivCount > 0
-                        ? `${delivCount} deliverable${delivCount !== 1 ? 's' : ''}`
-                        : <span className="text-muted">—</span>}
-                    </td>
-                    <td>
-                      <span className={`badge ${p.is_active ? 'badge-active' : 'badge-cancelled'}`}>
-                        {p.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex gap-8">
-                        <button className="btn btn-ghost btn-sm" onClick={() => togglePlatform(p)}>
-                          {p.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                        {delivCount === 0 && pAccounts.length === 0 && (
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deletePlatform(p)}>
-                            Delete
-                          </button>
-                        )}
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent)' }} onClick={() => openLinkAccount(p.name)}>
-                          + Link Account
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                {/* Accounts table */}
+                <div className="table-wrap" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                  <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <colgroup>
+                      <col style={{ width: '30%' }} />
+                      <col style={{ width: '30%' }} />
+                      <col style={{ width: 110 }} />
+                      <col />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Creator</th>
+                        <th>Account</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pAccounts.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} style={{ fontSize: 12, color: 'var(--text-muted)' }}>No accounts linked</td>
+                        </tr>
+                      ) : (
+                        pAccounts.map(a => {
+                          const url = accountUrl(a.platform, a.username);
+                          return (
+                            <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
+                              <td style={{ fontSize: 13 }}>{a.profile?.creator_name || a.profile?.full_name}</td>
+                              <td>
+                                {url ? (
+                                  <a href={url} target="_blank" rel="noreferrer" className="link" onClick={e => e.stopPropagation()}>
+                                    @{a.username}
+                                  </a>
+                                ) : (
+                                  <span>@{a.username}</span>
+                                )}
+                                {a.display_name && (
+                                  <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{a.display_name}</span>
+                                )}
+                              </td>
+                              <td>
+                                <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                                  {a.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td>
+                                <div className="flex gap-8">
+                                  <button className="btn btn-ghost btn-sm" onClick={() => openEditAccount(a)}>Edit</button>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => toggleAccount(a)}>
+                                    {a.is_active ? 'Deactivate' : 'Activate'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
 
-                  {/* Account sub-rows */}
-                  {pAccounts.length === 0 ? (
+          {/* Orphaned accounts */}
+          {orphanAccounts.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '2px solid var(--surface2)' }}>
+                <GenericPlatformLogo size={22} label="?" />
+                <span style={{ fontWeight: 700, fontSize: 13, letterSpacing: '0.04em', color: 'var(--text-muted)' }}>OTHER</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Platform not defined above</span>
+              </div>
+              <div className="table-wrap" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                <table style={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup>
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: 110 }} />
+                    <col />
+                  </colgroup>
+                  <thead>
                     <tr>
-                      <td style={{ borderBottom: '2px solid var(--surface2)' }} />
-                      <td colSpan={COL_COUNT - 1} style={{ fontSize: 12, color: '#333', paddingLeft: 20, borderBottom: '2px solid var(--surface2)' }}>
-                        No accounts linked
-                      </td>
+                      <th>Creator</th>
+                      <th>Account</th>
+                      <th>Status</th>
+                      <th></th>
                     </tr>
-                  ) : (
-                    pAccounts.map((a, idx) => {
-                      const isLast = idx === pAccounts.length - 1;
+                  </thead>
+                  <tbody>
+                    {orphanAccounts.map(a => {
                       const url = accountUrl(a.platform, a.username);
                       return (
                         <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
-                          <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }} />
-                          <td style={{ paddingLeft: 20, fontSize: 13, color: 'var(--text-muted)', borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <td style={{ fontSize: 13 }}>
                             {a.profile?.creator_name || a.profile?.full_name}
+                            <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>({a.platform})</span>
                           </td>
-                          <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <td>
                             {url ? (
-                              <a href={url} target="_blank" rel="noreferrer" className="link" onClick={e => e.stopPropagation()}>
-                                @{a.username}
-                              </a>
+                              <a href={url} target="_blank" rel="noreferrer" className="link">@{a.username}</a>
                             ) : (
                               <span>@{a.username}</span>
                             )}
-                            {a.display_name && (
-                              <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 8 }}>{a.display_name}</span>
-                            )}
                           </td>
-                          <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <td>
                             <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
                               {a.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <td>
                             <div className="flex gap-8">
                               <button className="btn btn-ghost btn-sm" onClick={() => openEditAccount(a)}>Edit</button>
                               <button className="btn btn-ghost btn-sm" onClick={() => toggleAccount(a)}>
@@ -340,56 +397,12 @@ export default function PlatformSetupView() {
                           </td>
                         </tr>
                       );
-                    })
-                  )}
-                </tbody>
-              );
-            })}
-
-            {/* Orphaned accounts (platform not defined in platforms table) */}
-            {orphanAccounts.length > 0 && (
-              <tbody>
-                <tr style={{ background: 'var(--surface2)' }}>
-                  <td style={{ paddingRight: 0 }}><GenericPlatformLogo size={24} label="?" /></td>
-                  <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Other</td>
-                  <td colSpan={3} style={{ fontSize: 12, color: 'var(--text-muted)' }}>Platform not defined above</td>
-                </tr>
-                {orphanAccounts.map((a, idx) => {
-                  const isLast = idx === orphanAccounts.length - 1;
-                  const url = accountUrl(a.platform, a.username);
-                  return (
-                    <tr key={a.id} style={{ opacity: a.is_active ? 1 : 0.5 }}>
-                      <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }} />
-                      <td style={{ paddingLeft: 20, fontSize: 13, color: 'var(--text-muted)', borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
-                        {a.profile?.creator_name || a.profile?.full_name}
-                        <span style={{ marginLeft: 8, fontSize: 11, color: '#333' }}>({a.platform})</span>
-                      </td>
-                      <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
-                        {url ? (
-                          <a href={url} target="_blank" rel="noreferrer" className="link">@{a.username}</a>
-                        ) : (
-                          <span>@{a.username}</span>
-                        )}
-                      </td>
-                      <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
-                        <span className={`badge ${a.is_active ? 'badge-active' : 'badge-cancelled'}`}>
-                          {a.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
-                        <div className="flex gap-8">
-                          <button className="btn btn-ghost btn-sm" onClick={() => openEditAccount(a)}>Edit</button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => toggleAccount(a)}>
-                            {a.is_active ? 'Deactivate' : 'Activate'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            )}
-          </table>
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
