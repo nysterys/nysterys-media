@@ -2,15 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
 export default function UsersView() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [users, setUsers]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [editingUser, setEditingUser] = useState(null);
 
-  useEffect(() => { fetch(); }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
-  async function fetch() {
+  async function fetchUsers() {
     const { data } = await supabase.from('profiles').select('*').order('full_name');
     setUsers(data || []);
     setLoading(false);
@@ -25,24 +23,34 @@ export default function UsersView() {
           <div className="page-title">USERS</div>
           <div className="page-subtitle">Manage creator and admin accounts</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>+ Invite User</button>
       </div>
 
-      {error && <div className="login-error mb-16">{error}</div>}
-      {success && <div style={{ background: 'rgba(74,223,138,0.1)', border: '1px solid rgba(74,223,138,0.3)', color: 'var(--green)', padding: '10px 14px', borderRadius: 6, marginBottom: 16, fontSize: 13 }}>{success}</div>}
-
       <div className="table-wrap">
-        <table>
+        <table style={{ tableLayout: 'fixed', width: '100%' }}>
+          <colgroup>
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '28%' }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: 130 }} />
+            <col />
+          </colgroup>
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Creator Name</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Creator Name</th><th>Idle Timeout</th><th></th></tr>
           </thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
                 <td style={{ fontWeight: 500 }}>{u.full_name}</td>
-                <td className="text-muted">{u.email}</td>
+                <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{u.email}</td>
                 <td><span className={`badge ${u.role === 'admin' ? 'badge-active' : 'badge-confirmed'}`}>{u.role}</span></td>
                 <td>{u.creator_name || <span className="text-muted">—</span>}</td>
+                <td style={{ fontSize: 12, color: u.idle_timeout_minutes ? 'var(--text)' : 'var(--text-muted)' }}>
+                  {u.idle_timeout_minutes ? `${u.idle_timeout_minutes} min` : 'Disabled'}
+                </td>
+                <td>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingUser(u)}>Edit</button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -58,6 +66,77 @@ export default function UsersView() {
           set <code style={{ background: 'var(--surface3)', padding: '1px 6px', borderRadius: 3 }}>creator_name</code> to their name.
           They will then only see their own campaigns when they log in.
         </p>
+      </div>
+
+      {editingUser && (
+        <EditUserModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={() => { setEditingUser(null); fetchUsers(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditUserModal({ user, onClose, onSaved }) {
+  const [enabled, setEnabled] = useState(user.idle_timeout_minutes != null);
+  const [minutes, setMinutes] = useState(user.idle_timeout_minutes || 30);
+  const [saving, setSaving]   = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await supabase
+      .from('profiles')
+      .update({ idle_timeout_minutes: enabled ? Math.max(1, minutes) : null })
+      .eq('id', user.id);
+    setSaving(false);
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 380 }}>
+        <div className="modal-header">
+          <div className="modal-title">IDLE TIMEOUT — {(user.full_name || '').toUpperCase()}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+              <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
+              <span style={{ fontSize: 13 }}>Enable idle timeout</span>
+            </label>
+            <div style={{ fontSize: 11, color: '#555', marginTop: 6 }}>
+              Disable for your own account during development.
+            </div>
+          </div>
+          {enabled && (
+            <div className="form-group">
+              <label className="form-label">Timeout (minutes)</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  max={480}
+                  value={minutes}
+                  onChange={e => setMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                  style={{ width: 90 }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  60s warning before sign-out
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
     </div>
   );
