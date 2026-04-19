@@ -120,7 +120,7 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
 
   function RewardGroupRow({ g, i, isLast }) {
     const gross    = g.entries.reduce((s, e) => s + (e.gross_amount || 0), 0);
-    const recvd    = g.entries.filter(e => e.you_received).reduce((s, e) => s + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0);
+    const recvd    = g.entries.filter(e => e.you_received).reduce((s, e) => s + (e.amount_received || e.invoice_amount || 0), 0);
     const pndRcpt  = g.entries.filter(e => !e.you_received).reduce((s, e) => s + (e.gross_amount || 0), 0);
     const paid     = g.entries.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
     const pend     = g.entries.filter(e => e.payout_status !== 'Paid' && e.you_received).reduce((s, e) => s + (e.payout_amount || e.gross_amount || 0), 0);
@@ -141,7 +141,7 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
 
   // Totals
   const tGross   = contracted + rewardGroups.reduce((s, g) => s + g.entries.reduce((ss, e) => ss + (e.gross_amount || 0), 0), 0);
-  const tRecvd   = received   + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.you_received).reduce((ss, e) => ss + Math.max(0, (e.amount_received || e.invoice_amount || 0) - (e.processing_fee || 0)), 0), 0);
+  const tRecvd   = received   + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.you_received).reduce((ss, e) => ss + (e.amount_received || e.invoice_amount || 0), 0), 0);
   const tPndRcpt = pendReceipt+ rewardGroups.reduce((s, g) => s + g.entries.filter(e => !e.you_received).reduce((ss, e) => ss + (e.gross_amount || 0), 0), 0);
   const tPaid    = paidOut    + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.payout_status === 'Paid').reduce((ss, e) => ss + (e.payout_amount || 0), 0), 0);
   const tPend    = pendPayout + rewardGroups.reduce((s, g) => s + g.entries.filter(e => e.payout_status !== 'Paid' && e.you_received).reduce((ss, e) => ss + (e.payout_amount || e.gross_amount || 0), 0), 0);
@@ -205,6 +205,8 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
   const [campaigns, setCampaigns]     = useState([]);
   const [summaryRows, setSummaryRows] = useState([]);
   const [rewardRows, setRewardRows]   = useState([]);
+  const [creators, setCreators]       = useState([]);
+  const [creatorFilter, setCreatorFilter] = useState('all');
   const [loading, setLoading]         = useState(true);
   const [period, setPeriod]           = useState(lastMonth());
 
@@ -226,13 +228,13 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
 
     // campaign_payout_summary: for financial table — proven correct in PaymentsView
     let summaryQuery = supabase.from('campaign_payout_summary').select(
-      'campaign_id, contracted_rate, payment_method, agency_payment_status, invoice_date, ' +
+      'campaign_id, creator_profile_id, contracted_rate, payment_method, agency_payment_status, invoice_date, ' +
       'invoice_amount, amount_received, processing_fee, you_received, you_received_date, ' +
       'payout_status, payout_amount, payout_date'
     );
 
     let rewardQuery = supabase.from('reward_payout_summary').select(
-      'entry_id, platform_name, program_name, period_month, gross_amount, ' +
+      'entry_id, profile_id, platform_name, program_name, period_month, gross_amount, ' +
       'amount_received, invoice_amount, processing_fee, you_received, ' +
       'payout_status, payout_amount'
     ).order('period_month', { ascending: false });
@@ -244,11 +246,16 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
       rewardQuery   = rewardQuery.eq('profile_id', profileId);
     }
 
-    const [cRes, sRes, rRes] = await Promise.all([campaignQuery, summaryQuery, rewardQuery]);
+    const creatorsQuery = isAdmin
+      ? supabase.from('profiles').select('id, full_name, creator_name').eq('role', 'creator')
+      : Promise.resolve({ data: [] });
 
-    setCampaigns(cRes.data  || []);
-    setSummaryRows(sRes.data || []);
-    setRewardRows(rRes.data  || []);
+    const [cRes, sRes, rRes, crRes] = await Promise.all([campaignQuery, summaryQuery, rewardQuery, creatorsQuery]);
+
+    setCampaigns(cRes.data   || []);
+    setSummaryRows(sRes.data  || []);
+    setRewardRows(rRes.data   || []);
+    setCreators(crRes.data    || []);
     setLoading(false);
   }
 
@@ -301,6 +308,18 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
   const rewardMonths   = [...new Set(rewardRows.map(e => e.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
   const allMonths      = [...new Set([...campaignMonths, ...rewardMonths])].sort().reverse();
 
+  // Apply creator filter (admin only)
+  const filteredSummaryRows = isAdmin && creatorFilter !== 'all'
+    ? summaryRows.filter(r => r.creator_profile_id === creatorFilter)
+    : summaryRows;
+  const filteredRewardRows = isAdmin && creatorFilter !== 'all'
+    ? rewardRows.filter(r => r.profile_id === creatorFilter)
+    : rewardRows;
+  // Also filter campaigns and activity tables
+  const filteredCampaigns = isAdmin && creatorFilter !== 'all'
+    ? campaigns.filter(c => c.creator_profile_id === creatorFilter)
+    : campaigns;
+
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
   const title    = isAdmin ? 'OVERVIEW' : `HEY, ${/* will be filled from profile in wrappers */ ''}`;
@@ -318,10 +337,22 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
           <div className="page-title">{isAdmin ? 'OVERVIEW' : 'MY OVERVIEW'}</div>
           <div className="page-subtitle">{subtitle}</div>
         </div>
-        <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}
-          value={period} onChange={e => setPeriod(e.target.value)}>
-          {buildPeriodOptions(allMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div className="flex items-center gap-8">
+          {isAdmin && creators.length > 0 && (
+            <div className="flex gap-6">
+              <button className={`filter-chip ${creatorFilter === 'all' ? 'active' : ''}`} onClick={() => setCreatorFilter('all')}>All</button>
+              {creators.map(c => (
+                <button key={c.id} className={`filter-chip ${creatorFilter === c.id ? 'active' : ''}`} onClick={() => setCreatorFilter(c.id)}>
+                  {c.creator_name || c.full_name}
+                </button>
+              ))}
+            </div>
+          )}
+          <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }}
+            value={period} onChange={e => setPeriod(e.target.value)}>
+            {buildPeriodOptions(allMonths).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Creator: 3 count tiles */}
@@ -334,7 +365,7 @@ export default function OverviewPage({ isAdmin, profileId, setActiveView, naviga
       )}
 
       {/* Financial summary table */}
-      <FinancialTable summaryRows={summaryRows} rewardRows={rewardRows} period={period} isAdmin={isAdmin} />
+      <FinancialTable summaryRows={filteredSummaryRows} rewardRows={filteredRewardRows} period={period} isAdmin={isAdmin} />
 
       {/* Needs attention */}
       {needsAttentionGrouped.length > 0 && (
