@@ -305,10 +305,10 @@ export default function PlatformSetupView() {
                   <table style={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
                       <col style={{ width: '22%' }} />
+                      <col style={{ width: '35%' }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 90 }} />
                       <col />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: 90 }} />
-                      <col style={{ width: '22%' }} />
                     </colgroup>
                     <thead>
                       <tr>
@@ -435,9 +435,11 @@ export default function PlatformSetupView() {
       )}
 
       {/* ── Deliverable Types ── */}
-      <div style={{ marginTop: 40 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>
-          Deliverable Types
+      <div style={{ marginTop: 56, paddingTop: 32, borderTop: '2px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Deliverable Types</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Platform-independent content formats</span>
         </div>
         {delivTypes.length === 0 ? (
           <div className="empty-state">
@@ -449,10 +451,10 @@ export default function PlatformSetupView() {
             <table style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
                 <col style={{ width: '22%' }} />
+                <col style={{ width: '35%' }} />
+                <col style={{ width: 110 }} />
+                <col style={{ width: 90 }} />
                 <col />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: '22%' }} />
               </colgroup>
               <thead>
                 <tr><th>Type</th><th>Description</th><th>Usage</th><th>Status</th><th></th></tr>
