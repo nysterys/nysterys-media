@@ -766,9 +766,14 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
               {genderAvg.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
-                  {profileAll.length > 0 && (
+                  {period === 'all' && profileAll.length > 0 && (
                     <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
                       ⚠ Re-run <strong>13-reapply-tiktok-rls.sql</strong> to restore access after Coupler sync.
+                    </div>
+                  )}
+                  {period !== 'all' && (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                      No snapshot exists for this period — only syncs from today onward are stored.
                     </div>
                   )}
                 </div>
@@ -778,9 +783,14 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
               {topCountries.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
-                  {profileAll.length > 0 && (
+                  {period === 'all' && profileAll.length > 0 && (
                     <div style={{ fontSize: 11, color: 'var(--orange)', lineHeight: 1.5 }}>
                       ⚠ Re-run <strong>13-reapply-tiktok-rls.sql</strong> after Coupler sync.
+                    </div>
+                  )}
+                  {period !== 'all' && (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                      No snapshot exists for this period — only syncs from today onward are stored.
                     </div>
                   )}
                 </div>
