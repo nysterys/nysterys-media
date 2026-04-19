@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
-import { fmtDate, fmtMoney } from '../../utils/format';
+import { fmtDate, fmtMoney, extractMonths } from '../../utils/format';
+import { inPeriod, PeriodSelect } from '../../utils/period';
 import { format, parseISO } from 'date-fns';
 
 function isInKind(paymentMethod) {
@@ -87,10 +88,8 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened, 
 
   const STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
 
-  const months = [...new Set(campaigns.map(c => {
-    const d = c.campaign_start_date || c.created_at;
-    return d ? d.slice(0, 7) : null;
-  }).filter(Boolean))].sort().reverse();
+  const campaignDates = campaigns.map(c => ({ date_ref: c.campaign_start_date || c.created_at?.slice(0, 10) }));
+  const months = extractMonths(campaignDates, 'date_ref');
 
   function toggleSort(col) {
     if (sortBy === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -109,11 +108,7 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened, 
 
   const filtered = campaigns
     .filter(c => filter === 'all' || c.status === filter)
-    .filter(c => {
-      if (monthFilter === 'all') return true;
-      const d = c.campaign_start_date || c.created_at || '';
-      return d.startsWith(monthFilter);
-    })
+    .filter(c => inPeriod(c.campaign_start_date || c.created_at, monthFilter))
     .sort((a, b) => {
       let av, bv;
       switch (sortBy) {
@@ -165,12 +160,7 @@ export default function CreatorCampaigns({ pendingCampaignId, onCampaignOpened, 
             {s === 'all' ? 'All' : s}
           </button>
         ))}
-        {months.length > 0 && (
-          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All months</option>
-            {months.map(m => { const [y, mo] = m.split('-'); return <option key={m} value={m}>{new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>; })}
-          </select>
-        )}
+        <PeriodSelect period={monthFilter} onChange={setMonthFilter} months={months} style={{ marginLeft: 8 }} />
       </div>
 
       {filtered.length === 0 ? (

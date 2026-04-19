@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { fmtDate, fmtMoney } from '../../utils/format';
+import { fmtDate, fmtMoney, extractMonths } from '../../utils/format';
+import { lastMonth, inPeriod, PeriodSelect } from '../../utils/period';
 
 function SplitStatusBadge({ status }) {
   const map = { 'Pending': 'badge-not-invoiced', 'Sent': 'badge-invoiced', 'Cleared': 'badge-paid', 'Failed': 'badge-overdue' };
@@ -13,8 +14,7 @@ export default function CreatorRewards() {
   const [entries, setEntries] = useState([]);
   const [splitsByPayoutId, setSplitsByPayoutId] = useState({});
   const [loading, setLoading] = useState(true);
-  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-  const [monthFilter, setMonthFilter] = useState(lastMonth);
+  const [period, setPeriod] = useState(lastMonth);
   const [selected, setSelected] = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
@@ -46,11 +46,8 @@ export default function CreatorRewards() {
     setLoading(false);
   }
 
-  const months = [...new Set(entries.map(e => e.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
-
-  const filtered = monthFilter === 'all'
-    ? entries
-    : entries.filter(e => e.period_month?.startsWith(monthFilter));
+  const months = extractMonths(entries, 'period_month');
+  const filtered = entries.filter(e => inPeriod(e.period_month, period));
 
   const totalEarned  = filtered.reduce((s, e) => s + (e.gross_amount || 0), 0);
   const totalPaid    = filtered.filter(e => e.payout_status === 'Paid').reduce((s, e) => s + (e.payout_amount || 0), 0);
@@ -66,15 +63,7 @@ export default function CreatorRewards() {
           <div className="page-title">MY REWARDS</div>
           <div className="page-subtitle">Platform creator rewards program earnings</div>
         </div>
-        {months.length > 0 && (
-          <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All time</option>
-            {months.map(m => {
-              const [y, mo] = m.split('-');
-              return <option key={m} value={m}>{new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>;
-            })}
-          </select>
-        )}
+        <PeriodSelect period={period} onChange={setPeriod} months={months} />
       </div>
 
       <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>

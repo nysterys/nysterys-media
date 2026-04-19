@@ -1,48 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Badge from './Badge';
-import { fmtDate, fmtMoney, fmtMonth, extractMonths, isValidDateString, isValidNumber } from '../../utils/format';
+import { fmtDate, fmtMoney, extractMonths, isValidDateString, isValidNumber } from '../../utils/format';
+import { lastMonth, inPeriod, PeriodSelect } from '../../utils/period';
 
 const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'];
 const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold', 'N/A'];
 const SPLIT_STATUSES  = ['Pending', 'Sent', 'Cleared', 'Failed'];
 
 function isInKind(pm) { return (pm || '').toLowerCase() === 'in kind'; }
-
-function currentQuarterStart() {
-  const now = new Date();
-  return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-}
-function lastQuarterRange() {
-  const now = new Date();
-  const q = Math.floor(now.getMonth() / 3);
-  const sy = q === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  const sm = q === 0 ? 9 : (q - 1) * 3;
-  return {
-    start: new Date(sy, sm, 1).toISOString().slice(0, 10),
-    end:   new Date(sy, sm + 3, 0).toISOString().slice(0, 10),
-  };
-}
-function inPeriod(dateStr, period) {
-  if (period === 'all') return true;
-  if (!dateStr) return false;
-  const d = dateStr.slice(0, 10);
-  if (period === 'ytd')      return d >= `${new Date().getFullYear()}-01-01`;
-  if (period === 'lastyear') return d.startsWith(String(new Date().getFullYear() - 1));
-  if (period === 'qtd')      return d >= currentQuarterStart().toISOString().slice(0, 10);
-  if (period === 'lastq')    { const { start, end } = lastQuarterRange(); return d >= start && d <= end; }
-  return d.startsWith(period);
-}
-function buildPeriodOptions(months) {
-  return [
-    { value: 'all',      label: 'All time' },
-    { value: 'ytd',      label: 'Year to date' },
-    { value: 'qtd',      label: 'Quarter to date' },
-    { value: 'lastq',    label: 'Last quarter' },
-    { value: 'lastyear', label: 'Last year' },
-    ...months.map(m => ({ value: m, label: fmtMonth(m) })),
-  ];
-}
 
 function openPopup(url) {
   if (!url) return;
@@ -102,10 +68,6 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
   const [loading, setLoading]       = useState(true);
   const [selected, setSelected]     = useState(null);
 
-  const lastMonth = () => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  };
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [agencyFilter,  setAgencyFilter]  = useState('all');
   const [payoutFilter,  setPayoutFilter]  = useState('all');
@@ -222,10 +184,7 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
         {['all', ...PAYOUT_STATUSES].map(s => (
           <button key={s} className={`filter-chip ${payoutFilter === s ? 'active' : ''}`} onClick={() => setPayoutFilter(s)}>{s === 'all' ? 'All' : s}</button>
         ))}
-        <select className="form-select" style={{ width: 'auto', padding: '5px 10px', fontSize: 12, marginLeft: 8 }}
-          value={period} onChange={e => setPeriod(e.target.value)}>
-          {buildPeriodOptions(months).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <PeriodSelect period={period} onChange={setPeriod} months={months} style={{ marginLeft: 8 }} />
       </div>
 
       {cashRows.length === 0 && inkRows.length === 0 ? (

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
-import { fmtDate, fmtMoney, fmtMonth, isValidDateString, isValidNumber } from '../../utils/format';
+import { fmtDate, fmtMoney, extractMonths, isValidDateString, isValidNumber } from '../../utils/format';
+import { lastMonth, inPeriod, PeriodSelect } from '../../utils/period';
 
 function isInKind(m) { return (m || '').toLowerCase() === 'in kind'; }
 
@@ -33,8 +34,7 @@ export default function RewardsView() {
   const [creators, setCreators] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const lastMonth = () => { const d = new Date(); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; };
-  const [monthFilter, setMonthFilter] = useState(lastMonth);
+  const [period, setPeriod] = useState(lastMonth);
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [programFilter, setProgramFilter] = useState('all');
   const [selected, setSelected] = useState(null);
@@ -56,12 +56,12 @@ export default function RewardsView() {
     setLoading(false);
   }
 
-  const months = [...new Set((entries || []).map(e => e.period_month?.slice(0, 7)).filter(Boolean))].sort().reverse();
+  const months = extractMonths(entries, 'period_month');
 
   const filtered = entries.filter(e => {
     if (creatorFilter !== 'all' && e.profile_id !== creatorFilter) return false;
     if (programFilter !== 'all' && e.program_id !== programFilter) return false;
-    if (monthFilter !== 'all' && e.period_month?.slice(0, 7) !== monthFilter) return false;
+    if (!inPeriod(e.period_month, period)) return false;
     return true;
   });
 
@@ -102,12 +102,7 @@ export default function RewardsView() {
         <span className="text-muted text-xs">PROGRAM</span>
         <button className={`filter-chip ${programFilter === 'all' ? 'active' : ''}`} onClick={() => setProgramFilter('all')}>All</button>
         {programs.map(p => <button key={p.id} className={`filter-chip ${programFilter === p.id ? 'active' : ''}`} onClick={() => setProgramFilter(p.id)}>{p.name}</button>)}
-        {months.length > 0 && (
-          <select className="form-select" style={{ width: 'auto', padding: '4px 8px', fontSize: 12, marginLeft: 8 }} value={monthFilter} onChange={e => setMonthFilter(e.target.value)}>
-            <option value="all">All time</option>
-            {months.map(m => { const [y, mo] = m.split('-'); return <option key={m} value={m}>{new Date(parseInt(y), parseInt(mo) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</option>; })}
-          </select>
-        )}
+        <PeriodSelect period={period} onChange={setPeriod} months={months} style={{ marginLeft: 8 }} />
       </div>
 
       <div className="table-wrap">
