@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-// ── Color definitions using app CSS vars ──────────────────────────────────────
+// ── Color definitions ─────────────────────────────────────────────────────────
 const C = {
   admin:     { color: '#a78bfa', bg: 'rgba(167,139,250,0.15)', border: '#a78bfa' },
   creator:   { color: '#ff8c42', bg: 'rgba(255,140,66,0.15)',  border: '#ff8c42' },
@@ -8,27 +8,23 @@ const C = {
   decision:  { color: '#4a9eff', bg: 'rgba(74,158,255,0.15)',  border: '#4a9eff' },
 };
 
-// ── Flow layout ───────────────────────────────────────────────────────────────
-// Each row has: phase, left node (col A), right node (col B, optional), connector type
-// connector: 'down' | 'right' | 'loop-right' | 'loop-left' | 'none'
+// ── Column geometry ───────────────────────────────────────────────────────────
+// Node width: 220px. HConnector: 8+24+7+8 = 47px. ColB starts at 267px.
+const A_CTR = 110;  // center x of col A
+const B_CTR = 377;  // center x of col B  (267 + 110)
 
+// ── Flow data ─────────────────────────────────────────────────────────────────
 const ROWS = [
-  // Phase label  | Left node          | Right node        | A→? | B→?
   { phase: 'Negotiation', divider: true },
   {
-    a: { id: 'inquiry', label: 'Inbound inquiry', sub: 'Brand or agency contact', who: 'admin' },
-    b: { id: 'negotiation', label: 'Rate negotiation', sub: 'Contracted rate agreed', who: 'admin' },
-    ab: 'right',   // A →  B
-    aNext: false,  // A goes down?
-    bNext: true,   // B goes down to next row?
+    a: { id: 'inquiry',     label: 'Inbound inquiry',    sub: 'Brand or agency contact',  who: 'admin' },
+    b: { id: 'negotiation', label: 'Rate negotiation',   sub: 'Contracted rate agreed',   who: 'admin' },
+    ab: 'right', aNext: false, bNext: true,
   },
   {
     a: { id: 'deal_signed', label: 'Deal signed', sub: 'Status → Confirmed', who: 'milestone' },
-    b: null,
-    ab: null,
-    aNext: true,
-    bNext: false,
-    aFrom: 'b-prev', // line comes from right col above
+    b: null, ab: null, aNext: true, bNext: false,
+    aFrom: 'b-prev',
   },
   { phase: 'Setup', divider: true },
   {
@@ -40,8 +36,8 @@ const ROWS = [
     b: null, ab: null, aNext: true, bNext: false,
   },
   {
-    a: { id: 'brief_shared', label: 'Brief shared', sub: 'Creator sees campaign', who: 'admin' },
-    b: { id: 'status_active', label: 'Status → Active', sub: 'Campaign live', who: 'milestone' },
+    a: { id: 'brief_shared',  label: 'Brief shared',     sub: 'Creator sees campaign', who: 'admin' },
+    b: { id: 'status_active', label: 'Status → Active',  sub: 'Campaign live',         who: 'milestone' },
     ab: 'right', aNext: false, bNext: true,
   },
   { phase: 'Delivery', divider: true },
@@ -51,8 +47,8 @@ const ROWS = [
     aFrom: 'b-prev',
   },
   {
-    a: { id: 'draft_submitted', label: 'Draft submitted', sub: 'Status → Draft Submitted', who: 'creator' },
-    b: { id: 'revisions', label: 'Revisions requested', sub: '↩ Loop back to draft', who: 'decision' },
+    a: { id: 'draft_submitted', label: 'Draft submitted',       sub: 'Status → Draft Submitted', who: 'creator' },
+    b: { id: 'revisions',       label: 'Revisions requested',   sub: '↩ Loop back to draft',     who: 'decision' },
     ab: 'right', aNext: true, bNext: false,
   },
   {
@@ -74,8 +70,8 @@ const ROWS = [
   },
   { phase: 'Settlement', divider: true },
   {
-    a: { id: 'agency_pays', label: 'Agency pays Patrick', sub: 'Receipt uploaded + cleared', who: 'admin' },
-    b: { id: 'overdue', label: 'Overdue?', sub: '↩ Chase, then re-check', who: 'decision' },
+    a: { id: 'agency_pays', label: 'Agency pays Patrick',   sub: 'Receipt uploaded + cleared', who: 'admin' },
+    b: { id: 'overdue',     label: 'Overdue?',              sub: '↩ Chase, then re-check',     who: 'decision' },
     ab: 'right', aNext: true, bNext: false,
   },
   {
@@ -84,11 +80,11 @@ const ROWS = [
   },
   { phase: 'Creator Payout', divider: true },
   {
-    a: { id: 'payout_created', label: 'Payout created', sub: 'Amount + destination splits', who: 'admin' },
+    a: { id: 'payout_created', label: 'Payout created',    sub: 'Amount + destination splits', who: 'admin' },
     b: null, ab: null, aNext: true, bNext: false,
   },
   {
-    a: { id: 'transfers_sent', label: 'Transfers sent', sub: 'Reference IDs recorded', who: 'admin' },
+    a: { id: 'transfers_sent', label: 'Transfers sent',     sub: 'Reference IDs recorded',     who: 'admin' },
     b: null, ab: null, aNext: true, bNext: false,
   },
   {
@@ -114,11 +110,11 @@ const DETAIL = {
   all_posted:       { desc: 'Once all deliverables are Posted, the Mark Complete button appears.', fields: ['All campaign_deliverables.draft_status = Posted', 'Campaign status → Completed'], tips: ['Admin can also mark complete from the campaign detail panel'] },
   invoice_sent:     { desc: 'Admin records the invoice sent to the agency. Hub tracks invoice status from here.', fields: ['Invoice number', 'Invoice date', 'Invoice amount', 'Payment status → Invoiced', 'Payment method'], tips: ['Access from Payments → click campaign row → Invoice tab', 'Invoice amount defaults to contracted rate but can differ'] },
   agency_pays:      { desc: 'Agency transfers payment. Admin records receipt details and marks money as cleared.', fields: ['Payment status → Paid', 'Paid date', 'Amount received', 'Money cleared ✓', 'Date cleared', 'Receipt upload (PDF/JPG)'], tips: ['Checking "Money cleared" unlocks the Payout tab for this campaign'] },
-  overdue:          { desc: 'If payment hasn\'t arrived by the expected date, mark Overdue and chase the agency externally.', fields: ['Payment status → Overdue'], tips: ['Use Admin Notes on the campaign to log chase activity', 'Overdue campaigns appear in the admin overview under Agency Payments Pending'] },
-  fee_noted:        { desc: 'Any payment processing fee is recorded against the invoice. This affects "You Received" net.', fields: ['Processing fee (e.g. $14.95)', 'You received = amount received − processing fee'], tips: ['The fee is tracked for tax purposes and appears in the Fees column on the overview financial table'] },
+  overdue:          { desc: "If payment hasn't arrived by the expected date, mark Overdue and chase the agency externally.", fields: ['Payment status → Overdue'], tips: ['Use Admin Notes on the campaign to log chase activity', 'Overdue campaigns appear in the admin overview under Agency Payments Pending'] },
+  fee_noted:        { desc: 'Any payment processing fee is recorded against the invoice. This affects "You Received" net.', fields: ['Processing fee (e.g. $14.95)', 'Net received = invoice amount − processing fee'], tips: ['The fee is tracked for tax purposes and appears in the Fees column on the overview financial table'] },
   payout_created:   { desc: 'Admin creates the payout record and configures destination splits by percentage.', fields: ['Payout amount', 'Payout status → Pending', 'Destination (bank / UTMA / other)', 'Percentage per destination', 'Payout notes'], tips: ['Set up Payment Destinations first in Setup → Payment Destinations', 'Percentages must total 100%', '"Other" destination type shows notes field in place of account type'] },
   transfers_sent:   { desc: 'Admin initiates the bank transfers and records sent dates and transaction IDs per split.', fields: ['Split status → Sent', 'Sent date', 'Reference / transaction ID'], tips: ['Record the bank reference number for each split — useful if a transfer is disputed or delayed'] },
-  cleared:          { desc: 'Admin confirms each transfer cleared. Payout status set to Paid. Campaign fully settled.', fields: ['Split status → Cleared', 'Cleared date', 'Payout status → Paid'], tips: ['Creator sees split status in My Payments — Cleared lets them confirm receipt', 'Once Paid, the campaign appears in the creator\'s "Paid to Me" total on their overview'] },
+  cleared:          { desc: "Admin confirms each transfer cleared. Payout status set to Paid. Campaign fully settled.", fields: ['Split status → Cleared', 'Cleared date', 'Payout status → Paid'], tips: ["Creator sees split status in My Payments — Cleared lets them confirm receipt", "Once Paid, the campaign appears in the creator's \"Paid to Me\" total on their overview"] },
 };
 
 // ── Tooltip ───────────────────────────────────────────────────────────────────
@@ -192,18 +188,40 @@ function Node({ node, active, onEnter, onLeave }) {
   );
 }
 
-// ── Connector: vertical arrow stub ────────────────────────────────────────────
-const VArrow = ({ color = '#3a3a3a' }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, height: 28, justifyContent: 'flex-end' }}>
-    <div style={{ width: 1.5, flex: 1, background: color }} />
-    <svg width="9" height="7" viewBox="0 0 9 7" style={{ display: 'block', flexShrink: 0 }}>
+// ── Connectors ────────────────────────────────────────────────────────────────
+
+// Straight vertical arrow, centered on column x
+const VArrow = ({ color, x }) => (
+  <div style={{ position: 'relative', height: 28, pointerEvents: 'none' }}>
+    <div style={{ position: 'absolute', left: x - 0.75, top: 0, bottom: 7, width: 1.5, background: color }} />
+    <svg style={{ position: 'absolute', left: x - 4.5, bottom: 0 }} width="9" height="7" viewBox="0 0 9 7">
       <path d="M4.5 7L0 0L9 0Z" fill={color} />
     </svg>
   </div>
 );
 
-// ── Horizontal connector: A→B ─────────────────────────────────────────────────
-const HConnector = ({ color = '#3a3a3a' }) => (
+// Elbow: drops from col B, turns left, arrives at col A with downward arrowhead
+const ElbowBtoA = ({ color }) => {
+  const h = 40;
+  const midY = 20;
+  return (
+    <div style={{ position: 'relative', height: h, pointerEvents: 'none' }}>
+      {/* Vertical drop from B center */}
+      <div style={{ position: 'absolute', left: B_CTR - 0.75, top: 0, width: 1.5, height: midY, background: color }} />
+      {/* Horizontal segment: B → A */}
+      <div style={{ position: 'absolute', left: A_CTR, top: midY - 0.75, width: B_CTR - A_CTR + 0.75, height: 1.5, background: color }} />
+      {/* Vertical drop from A center to arrowhead */}
+      <div style={{ position: 'absolute', left: A_CTR - 0.75, top: midY, width: 1.5, height: h - midY - 7, background: color }} />
+      {/* Arrowhead at A center */}
+      <svg style={{ position: 'absolute', left: A_CTR - 4.5, bottom: 0 }} width="9" height="7" viewBox="0 0 9 7">
+        <path d="M4.5 7L0 0L9 0Z" fill={color} />
+      </svg>
+    </div>
+  );
+};
+
+// Horizontal connector: A → B
+const HConnector = ({ color }) => (
   <div style={{ display: 'flex', alignItems: 'center', height: '100%', padding: '0 8px', flexShrink: 0 }}>
     <div style={{ width: 24, height: 1.5, background: color }} />
     <svg width="7" height="9" viewBox="0 0 7 9" style={{ display: 'block', flexShrink: 0 }}>
@@ -216,9 +234,38 @@ const HConnector = ({ color = '#3a3a3a' }) => (
 export default function CampaignFlowView() {
   const [active, setActive] = useState(null);
 
-  // Build a flat list of renderable items
-  // We track whether col A or col B of the previous row had the "outgoing" connector
-  const CONN_COLOR = '#404040';
+  // Pre-compute rendering segments: dividers, connectors, node rows
+  const segments = [];
+  let prevNI = -1;
+
+  for (let i = 0; i < ROWS.length; i++) {
+    const row = ROWS[i];
+
+    if (row.divider) {
+      segments.push({ type: 'divider', row, key: `div-${i}` });
+      continue;
+    }
+
+    // Insert connector between consecutive node rows
+    if (prevNI >= 0) {
+      const prev = ROWS[prevNI];
+      const srcColor = (prev.bNext ? prev.b : prev.a)
+        ? C[(prev.bNext ? prev.b : prev.a).who].color
+        : '#555';
+
+      if (prev.bNext) {
+        segments.push({ type: 'elbow-b-a', color: srcColor, key: `conn-${i}` });
+      } else if (prev.aNext) {
+        segments.push({ type: 'arrow-a', color: srcColor, key: `conn-${i}` });
+      }
+    }
+
+    segments.push({ type: 'row', row, key: `row-${i}` });
+    prevNI = i;
+  }
+
+  // Final connector → terminal node
+  segments.push({ type: 'arrow-a', color: C.milestone.color, key: 'conn-final' });
 
   return (
     <div className="page">
@@ -240,92 +287,68 @@ export default function CampaignFlowView() {
       <div style={{ display: 'flex', gap: 40 }}>
         {/* Main flow */}
         <div style={{ flex: 1, maxWidth: 560 }}>
-          {ROWS.map((row, ri) => {
-            // Phase divider
-            if (row.divider) {
+          {segments.map(seg => {
+            if (seg.type === 'divider') {
               return (
-                <div key={`phase-${ri}`} style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 14px' }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#ff5c00', whiteSpace: 'nowrap' }}>{row.phase}</div>
+                <div key={seg.key} style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 14px' }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 3, textTransform: 'uppercase', color: '#ff5c00', whiteSpace: 'nowrap' }}>{seg.row.phase}</div>
                   <div style={{ flex: 1, height: 1, background: '#1e1e1e' }} />
                 </div>
               );
             }
 
+            if (seg.type === 'arrow-a') {
+              return <VArrow key={seg.key} color={seg.color} x={A_CTR} />;
+            }
+
+            if (seg.type === 'elbow-b-a') {
+              return <ElbowBtoA key={seg.key} color={seg.color} />;
+            }
+
+            // Node row
+            const { row } = seg;
             const { a, b, ab } = row;
             const aActive = active === a?.id;
             const bActive = active === b?.id;
-            const aColor = a ? C[a.who].color : CONN_COLOR;
-            const bColor = b ? C[b.who].color : CONN_COLOR;
-
-            // Determine if we need a down-arrow stub above col A (coming from previous row)
-            const prevRow = ROWS[ri - 1];
-            const prevNodeRow = ROWS.slice(0, ri).reverse().find(r => !r.divider);
-            const showAArrow = prevNodeRow && (prevNodeRow.aNext || prevNodeRow.bNext);
-            const arrowColor = prevNodeRow ? (prevNodeRow.bNext ? (prevNodeRow.b ? C[prevNodeRow.b.who].color : CONN_COLOR) : (prevNodeRow.a ? C[prevNodeRow.a.who].color : CONN_COLOR)) : CONN_COLOR;
+            const aColor = a ? C[a.who].color : '#555';
 
             return (
-              <div key={`row-${ri}`}>
-                {/* Arrow coming down into this row */}
-                {showAArrow && (
-                  <div style={{ marginLeft: prevNodeRow.bNext && !prevNodeRow.aNext ? 245 : 20 }}>
-                    <VArrow color={arrowColor} />
-                  </div>
+              <div key={seg.key} style={{ display: 'flex', alignItems: 'center' }}>
+                {a && (
+                  <Node node={a} active={aActive}
+                    onEnter={() => setActive(a.id)}
+                    onLeave={() => setActive(null)} />
                 )}
-
-                {/* The row of nodes */}
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  {/* Col A */}
-                  {a && (
-                    <Node
-                      node={a}
-                      active={aActive}
-                      onEnter={() => setActive(a.id)}
-                      onLeave={() => setActive(null)}
-                    />
-                  )}
-
-                  {/* A→B horizontal connector */}
-                  {b && ab === 'right' && (
-                    <HConnector color={aColor} />
-                  )}
-
-                  {/* Col B */}
-                  {b && (
-                    <Node
-                      node={b}
-                      active={bActive}
-                      onEnter={() => setActive(b.id)}
-                      onLeave={() => setActive(null)}
-                    />
-                  )}
-                </div>
+                {b && ab === 'right' && <HConnector color={aColor} />}
+                {b && (
+                  <Node node={b} active={bActive}
+                    onEnter={() => setActive(b.id)}
+                    onLeave={() => setActive(null)} />
+                )}
               </div>
             );
           })}
 
-          {/* Final closed node */}
-          <div style={{ marginLeft: 20, marginTop: 0 }}>
-            <VArrow color={C.milestone.color} />
-            <div style={{
-              width: 220,
-              background: '#0f0f0f',
-              border: '1px solid #222',
-              borderRadius: 8,
-              padding: '10px 16px',
-            }}>
-              <div style={{ fontSize: 12, color: '#444', fontWeight: 500 }}>Campaign record closed</div>
-              <div style={{ fontSize: 10, color: '#333' }}>Fully settled — archived</div>
-            </div>
+          {/* Terminal node */}
+          <div style={{
+            width: 220,
+            background: '#0f0f0f',
+            border: '1px solid #222',
+            borderRadius: 8,
+            padding: '10px 16px',
+          }}>
+            <div style={{ fontSize: 12, color: '#444', fontWeight: 500 }}>Campaign record closed</div>
+            <div style={{ fontSize: 10, color: '#333' }}>Fully settled — archived</div>
           </div>
         </div>
 
-        {/* Quick reference legend */}
+        {/* Quick reference */}
         <div style={{ width: 200, flexShrink: 0, paddingTop: 8 }}>
           <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: '#444', marginBottom: 12 }}>Quick reference</div>
           {[
-            { label: 'Status values', items: ['Not Started', 'Draft Submitted', 'Revisions Requested', 'Approved', 'Posted'] },
+            { label: 'Status values',   items: ['Not Started', 'Draft Submitted', 'Revisions Requested', 'Approved', 'Posted'] },
             { label: 'Invoice statuses', items: ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue'] },
-            { label: 'Payout statuses', items: ['Pending', 'Sent', 'Cleared', 'Paid'] },
+            { label: 'Payout statuses',  items: ['Pending', 'Sent', 'Cleared', 'Paid'] },
           ].map(group => (
             <div key={group.label} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: '#555', marginBottom: 6 }}>{group.label}</div>
