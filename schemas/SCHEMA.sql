@@ -886,26 +886,38 @@ begin
   end;
 
   begin
+    execute 'drop view if exists public.tiktok_audience_gender_view;';
     execute $v$
-      create or replace view public.tiktok_audience_gender_view as
-      select account__username as tiktok_username, audience__gender as gender,
-        engagement____of_followers as percentage, engagement__total_followers as follower_count
-      from public.tiktok_audience_gender_kym union all
-      select account__username, audience__gender, engagement____of_followers, engagement__total_followers
-      from public.tiktok_audience_gender_mys;
+      create view public.tiktok_audience_gender_view as
+      select distinct on (tiktok_username, date, gender) * from (
+        select account__username as tiktok_username, report__date as date,
+          audience__gender as gender, engagement____of_followers as percentage,
+          engagement__total_followers as follower_count
+        from public.tiktok_audience_gender_kym
+        union all
+        select account__username, report__date, audience__gender,
+          engagement____of_followers, engagement__total_followers
+        from public.tiktok_audience_gender_mys
+      ) t order by tiktok_username, date, gender;
     $v$;
     execute 'grant select on public.tiktok_audience_gender_view to authenticated;';
   exception when others then null;
   end;
 
   begin
+    execute 'drop view if exists public.tiktok_audience_country_view;';
     execute $v$
-      create or replace view public.tiktok_audience_country_view as
-      select account__username as tiktok_username, audience__country as country,
-        engagement____of_followers as percentage, engagement__total_followers as follower_count
-      from public.tiktok_audience_country_kym union all
-      select account__username, audience__country, engagement____of_followers, engagement__total_followers
-      from public.tiktok_audience_country_mys;
+      create view public.tiktok_audience_country_view as
+      select distinct on (tiktok_username, date, country) * from (
+        select account__username as tiktok_username, report__date as date,
+          audience__country as country, engagement____of_followers as percentage,
+          engagement__total_followers as follower_count
+        from public.tiktok_audience_country_kym
+        union all
+        select account__username, report__date, audience__country,
+          engagement____of_followers, engagement__total_followers
+        from public.tiktok_audience_country_mys
+      ) t order by tiktok_username, date, country;
     $v$;
     execute 'grant select on public.tiktok_audience_country_view to authenticated;';
   exception when others then null;
