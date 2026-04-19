@@ -57,22 +57,60 @@ function buildPeriodOptions(months) {
 }
 
 function CreatorFinancialTable({ campaigns, rewards, period }) {
-  // Campaign data from campaigns array
-  const filtCampaigns = campaigns.filter(c => {
-    const p = c.creator_payouts?.[0];
+  // For period filtering: use the best available date for each campaign.
+  // Cancelled campaigns excluded. Non-cancelled campaigns with no date are included for 'all'.
+  function campaignDateRef(c) {
+    const p   = c.creator_payouts?.[0];
     const inv = c.invoices?.[0];
-    const dateRef = p?.payout_date || inv?.you_received_date || inv?.invoice_date;
+    return p?.payout_date || inv?.you_received_date || inv?.invoice_date ||
+           c.campaign_end_date || c.deal_signed_date || null;
+  }
+
+  const activeCampaigns = campaigns.filter(c => c.status !== 'Cancelled');
+
+  // Period filter: include if dateRef matches period OR if no date and period is 'all'
+  const filtCampaigns = activeCampaigns.filter(c => {
+    const dateRef = campaignDateRef(c);
+    if (!dateRef) return period === 'all';
     return inPeriod(dateRef, period);
   });
 
   const cashCampaigns = filtCampaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method));
-  const contracted    = cashCampaigns.reduce((s, c) => s + (c.contracted_rate || 0), 0);
-  const agencyPaid    = cashCampaigns.filter(c => c.invoices?.[0]?.payment_status === 'Paid').reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount || c.contracted_rate || 0), 0);
-  const pendReceipt   = cashCampaigns.filter(c => ['Not Invoiced','Invoiced','Pending'].includes(c.invoices?.[0]?.payment_status)).reduce((s, c) => s + (c.contracted_rate || 0), 0);
-  const paidToMe      = cashCampaigns.filter(c => c.creator_payouts?.[0]?.payout_status === 'Paid').reduce((s, c) => s + (c.creator_payouts?.[0]?.payout_amount || 0), 0);
-  const pendPayout    = cashCampaigns.filter(c => c.creator_payouts?.[0]?.payout_status !== 'Paid' && c.creator_payouts?.[0]).reduce((s, c) => s + (c.creator_payouts?.[0]?.payout_amount || 0), 0);
-  const fees          = cashCampaigns.reduce((s, c) => s + (c.invoices?.[0]?.processing_fee || 0), 0);
-  const inKind        = filtCampaigns.filter(c => isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0), 0);
+
+  // Contracted = all cash campaigns in period (invoice or not)
+  const contracted  = cashCampaigns.reduce((s, c) => s + (c.contracted_rate || 0), 0);
+
+  // Agency paid = invoice paid
+  const agencyPaid  = cashCampaigns
+    .filter(c => c.invoices?.[0]?.payment_status === 'Paid')
+    .reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount || c.contracted_rate || 0), 0);
+
+  // Pending receipt = not yet paid by agency (includes no invoice at all)
+  const pendReceipt = cashCampaigns
+    .filter(c => {
+      const status = c.invoices?.[0]?.payment_status;
+      // No invoice OR invoice not yet paid
+      return !status || ['Not Invoiced','Invoiced','Pending'].includes(status);
+    })
+    .reduce((s, c) => s + (c.contracted_rate || 0), 0);
+
+  // Paid to me = creator payout cleared
+  const paidToMe    = cashCampaigns
+    .filter(c => c.creator_payouts?.[0]?.payout_status === 'Paid')
+    .reduce((s, c) => s + (c.creator_payouts?.[0]?.payout_amount || 0), 0);
+
+  // Pending payout = payout exists but not paid
+  const pendPayout  = cashCampaigns
+    .filter(c => c.creator_payouts?.[0] && c.creator_payouts[0].payout_status !== 'Paid')
+    .reduce((s, c) => s + (c.creator_payouts?.[0]?.payout_amount || 0), 0);
+
+  // Fees = sum of processing fees on invoices
+  const fees        = cashCampaigns.reduce((s, c) => s + (c.invoices?.[0]?.processing_fee || 0), 0);
+
+  // In-kind = all in-kind campaigns in period
+  const inKind      = filtCampaigns
+    .filter(c => isInKind(c.invoices?.[0]?.payment_method))
+    .reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0), 0);
 
   // Rewards grouped by platform+program
   const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
