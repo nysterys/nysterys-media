@@ -165,6 +165,7 @@ tbody tr:hover { background: var(--surface2); }
 .form-input::placeholder { color: var(--dim); }
 .form-textarea { resize: vertical; min-height: 80px; }
 .form-select { appearance: none; cursor: pointer; }
+.form-select option { background: var(--surface2); color: var(--white); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 
