@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { PlatformLogo } from '../shared/PlatformLogo';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function UsersView() {
@@ -64,8 +63,12 @@ export default function UsersView() {
                   <td>{u.creator_name || <span className="text-muted">—</span>}</td>
                   <td>
                     {platforms.length > 0 ? (
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {platforms.map(p => <PlatformLogo key={p} name={p} size={20} />)}
+                      <div className="flex gap-8" style={{ flexWrap: 'wrap' }}>
+                        {platforms.map(p => (
+                          <span key={p} className="badge badge-confirmed">
+                            {p.toUpperCase()}
+                          </span>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-muted">—</span>
