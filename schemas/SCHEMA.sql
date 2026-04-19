@@ -689,12 +689,14 @@ select distinct on (tiktok_username, date) * from (
     engagement__video_views as video_views,
     engagement__comments as comments
   from public.tiktok_profile_insights_kym
+  where engagement__followers_count_on_date > 0
   union all
   select account__username, report__date,
     engagement__total_followers, engagement__followers_count_on_date,
     engagement__likes, engagement__shares, engagement__profile_views,
     engagement__video_views, engagement__comments
   from public.tiktok_profile_insights_mys
+  where engagement__followers_count_on_date > 0
 ) t
 order by tiktok_username, date;
 
