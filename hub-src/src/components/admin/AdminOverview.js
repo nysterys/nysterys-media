@@ -55,22 +55,60 @@ function buildPeriodOptions(months) {
 }
 
 // ── Financial summary table ────────────────────────────────────────────────
-function FinancialTable({ invoices, payouts, rewards, period, isAdmin }) {
-  // Campaign row
-  const filtInv = invoices.filter(i => inPeriod(i.invoice_date || i.you_received_date, period));
-  const filtPay = payouts.filter(p => {
-    const inv = invoices.find(i => i.campaign_id === p.campaign_id);
-    return inPeriod(inv?.invoice_date || inv?.you_received_date, period);
+function FinancialTable({ invoices, payouts, campaigns, rewards, period, isAdmin }) {
+  // Best date for a campaign: use invoice date, payout date, or campaign dates as fallback
+  function campaignDateRef(c) {
+    const inv = c.invoices?.[0];
+    const p   = c.creator_payouts?.[0];
+    return inv?.invoice_date || inv?.you_received_date || p?.payout_date ||
+           c.campaign_end_date || c.deal_signed_date || null;
+  }
+
+  const activeCampaigns = (campaigns || []).filter(c => c.status !== 'Cancelled');
+
+  // Period-filtered campaigns — no date = include only for 'all'
+  const filtCampaigns = activeCampaigns.filter(c => {
+    const dateRef = campaignDateRef(c);
+    if (!dateRef) return period === 'all';
+    return inPeriod(dateRef, period);
   });
 
-  const cashInv    = filtInv.filter(i => !isInKind(i.payment_method));
-  const contracted = cashInv.reduce((s, i) => s + (i.invoice_amount || 0), 0);
-  const received   = cashInv.filter(i => i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
-  const pendReceipt= cashInv.filter(i => ['Not Invoiced','Invoiced','Pending'].includes(i.payment_status)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
-  const paidOut    = filtPay.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
-  const pendPayout = filtPay.filter(p => p.payout_status !== 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
-  const fees       = cashInv.reduce((s, i) => s + (i.processing_fee || 0), 0);
-  const inKind     = invoices.filter(i => isInKind(i.payment_method)).reduce((s, i) => s + (i.invoice_amount || 0), 0);
+  // Also filter the flat invoices/payouts arrays for cross-referencing
+  const filtInv = invoices.filter(i => {
+    const dateRef = i.invoice_date || i.you_received_date;
+    if (!dateRef) return period === 'all';
+    return inPeriod(dateRef, period);
+  });
+  const filtPay = payouts.filter(p => {
+    const inv = invoices.find(i => i.campaign_id === p.campaign_id);
+    const dateRef = inv?.invoice_date || inv?.you_received_date;
+    if (!dateRef) return period === 'all';
+    return inPeriod(dateRef, period);
+  });
+
+  const cashCampaigns = filtCampaigns.filter(c => !isInKind(c.invoices?.[0]?.payment_method));
+
+  // Contracted = all cash campaigns in period
+  const contracted  = cashCampaigns.reduce((s, c) => s + (c.contracted_rate || 0), 0);
+
+  // Received = invoices paid
+  const received    = filtInv.filter(i => !isInKind(i.payment_method) && i.payment_status === 'Paid').reduce((s, i) => s + (i.invoice_amount || 0), 0);
+
+  // Pending receipt = no invoice OR invoice not yet paid
+  const pendReceipt = cashCampaigns.filter(c => {
+    const status = c.invoices?.[0]?.payment_status;
+    return !status || ['Not Invoiced','Invoiced','Pending'].includes(status);
+  }).reduce((s, c) => s + (c.contracted_rate || 0), 0);
+
+  // Paid out / pending payout from flat payouts array
+  const paidOut     = filtPay.filter(p => p.payout_status === 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
+  const pendPayout  = filtPay.filter(p => p.payout_status !== 'Paid').reduce((s, p) => s + (p.payout_amount || 0), 0);
+
+  // Fees from invoices
+  const fees        = filtInv.filter(i => !isInKind(i.payment_method)).reduce((s, i) => s + (i.processing_fee || 0), 0);
+
+  // In-kind = in-kind campaigns in period
+  const inKind      = filtCampaigns.filter(c => isInKind(c.invoices?.[0]?.payment_method)).reduce((s, c) => s + (c.invoices?.[0]?.invoice_amount ?? c.contracted_rate ?? 0), 0);
 
   // Rewards grouped by platform+program
   const filtRewards = rewards.filter(e => inPeriod(e.period_month, period));
@@ -277,7 +315,7 @@ export default function AdminOverview({ setActiveView }) {
       </div>
 
       {/* Financial summary table */}
-      <FinancialTable invoices={invoices} payouts={payouts} rewards={rewards} period={period} isAdmin={true} />
+      <FinancialTable invoices={invoices} payouts={payouts} campaigns={campaigns} rewards={rewards} period={period} isAdmin={true} />
 
       {/* Needs attention */}
       {needsAttentionGrouped.length > 0 && (
