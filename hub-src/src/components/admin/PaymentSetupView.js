@@ -294,18 +294,27 @@ export default function PaymentSetupView() {
         </div>
       ) : (
         <div className="table-wrap" style={{ marginBottom: 36 }}>
-          <table>
+          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: 40 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: 90 }} />
+              <col />
+            </colgroup>
             <thead>
-              <tr><th></th><th>Method</th><th>Usage</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Method</th><th colSpan={3}>Usage</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {methods.map(m => {
                 const count = usageCounts[m.name.toLowerCase()] || 0;
                 return (
                   <tr key={m.id} style={{ opacity: m.is_active ? 1 : 0.5 }}>
-                    <td style={{ width: 32, paddingRight: 0 }}><MethodLogo name={m.name} size={24} /></td>
+                    <td style={{ paddingRight: 0 }}><MethodLogo name={m.name} size={24} /></td>
                     <td style={{ fontWeight: 500 }}>{m.name}</td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                    <td colSpan={3} style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                       {count > 0 ? `${count} invoice${count !== 1 ? 's' : ''}` : <span className="text-muted">—</span>}
                     </td>
                     <td>
@@ -366,12 +375,12 @@ export default function PaymentSetupView() {
                 <div className="table-wrap" style={{ marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                   <table style={{ tableLayout: 'fixed', width: '100%' }}>
                     <colgroup>
-                      <col style={{ width: 36 }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: 100 }} />
-                      <col style={{ width: '25%' }} />
-                      <col style={{ width: '20%' }} />
-                      <col style={{ width: 100 }} />
+                      <col style={{ width: 40 }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: 90 }} />
+                      <col style={{ width: '22%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: 90 }} />
                       <col />
                     </colgroup>
                     <thead>
