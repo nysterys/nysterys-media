@@ -2,6 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { isValidEmail } from '../../utils/format';
 
+const CONTACT_METHODS = ['Email', 'Text', 'WhatsApp', 'Direct Message'];
+
+function ContactMethodIcon({ method }) {
+  if (!method) return null;
+  const m = method.toLowerCase();
+  const style = { flexShrink: 0 };
+
+  if (m === 'email') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} title="Preferred: Email">
+      <rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="2,4 12,13 22,4"/>
+    </svg>
+  );
+  if (m === 'text') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} title="Preferred: Text">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+  );
+  if (m === 'whatsapp') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#25D366" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} title="Preferred: WhatsApp">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+    </svg>
+  );
+  if (m === 'direct message') return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style} title="Preferred: Direct Message">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+  );
+  return null;
+}
+
+function IconLink({ href, title, children }) {
+  return (
+    <a href={href} target="_blank" rel="noreferrer" title={title}
+      style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
+      onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+      {children}
+    </a>
+  );
+}
+
 export default function AgenciesView() {
   const [agencies, setAgencies]   = useState([]);
   const [statsMap, setStatsMap]   = useState({});
@@ -25,7 +66,6 @@ export default function AgenciesView() {
     setAgencies(aRes.data || []);
     setPaymentTerms((tRes.data || []).map(t => t.name));
 
-    // Build statsMap: agencyId → { creatorId → { name, campaigns, posts } }
     const map = {};
     for (const c of (cRes.data || [])) {
       if (!c.agency_id) continue;
@@ -72,17 +112,16 @@ export default function AgenciesView() {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
-              <col style={{ width: 60 }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '20%' }} />
+              <col style={{ width: 80 }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '17%' }} />
               <col style={{ width: 130 }} />
               <col />
               <col style={{ width: 90 }} />
               <col style={{ width: 160 }} />
             </colgroup>
             <thead>
-              <tr><th></th><th>Name</th><th>Contact</th><th>Email</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Name</th><th>Contact</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {agencies.map(a => {
@@ -93,37 +132,37 @@ export default function AgenciesView() {
                     <td style={{ paddingRight: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {a.website ? (
-                          <a href={a.website} target="_blank" rel="noreferrer" title={a.website}
-                            style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                          <IconLink href={a.website} title={a.website}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
                               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
                             </svg>
-                          </a>
-                        ) : (
-                          <span style={{ display: 'inline-block', width: 14 }} />
-                        )}
+                          </IconLink>
+                        ) : <span style={{ width: 14 }} />}
                         {a.portal_url ? (
-                          <a href={a.portal_url} target="_blank" rel="noreferrer" title={`Portal: ${a.portal_url}`}
-                            style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)', transition: 'color 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.color = 'var(--white)'}
-                            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+                          <IconLink href={a.portal_url} title={`Portal: ${a.portal_url}`}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
                               <polyline points="10 17 15 12 10 7"/>
                               <line x1="15" y1="12" x2="3" y2="12"/>
                             </svg>
-                          </a>
-                        ) : (
-                          <span style={{ display: 'inline-block', width: 14 }} />
-                        )}
+                          </IconLink>
+                        ) : <span style={{ width: 14 }} />}
                       </div>
                     </td>
                     <td style={{ fontWeight: 500 }}>{a.name}</td>
-                    <td>{a.contact_name || <span className="text-muted">—</span>}</td>
-                    <td style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email || <span className="text-muted">—</span>}</td>
+                    <td>
+                      {a.contact_name ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {a.email ? (
+                            <a href={`mailto:${a.email}`} title={a.email} className="link" style={{ fontWeight: 400 }}>
+                              {a.contact_name}
+                            </a>
+                          ) : a.contact_name}
+                          <ContactMethodIcon method={a.preferred_contact} />
+                        </div>
+                      ) : <span className="text-muted">—</span>}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
                     <td>
                       {hasStats ? (
@@ -174,14 +213,15 @@ export default function AgenciesView() {
 
 function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
   const [form, setForm] = useState({
-    name:          agency?.name          || '',
-    contact_name:  agency?.contact_name  || '',
-    email:         agency?.email         || '',
-    phone:         agency?.phone         || '',
-    website:       agency?.website       || '',
-    portal_url:    agency?.portal_url    || '',
-    payment_terms: agency?.payment_terms || paymentTerms[0] || '',
-    notes:         agency?.notes         || '',
+    name:               agency?.name               || '',
+    contact_name:       agency?.contact_name       || '',
+    email:              agency?.email              || '',
+    phone:              agency?.phone              || '',
+    preferred_contact:  agency?.preferred_contact  || '',
+    website:            agency?.website            || '',
+    portal_url:         agency?.portal_url         || '',
+    payment_terms:      agency?.payment_terms      || paymentTerms[0] || '',
+    notes:              agency?.notes              || '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState('');
@@ -200,7 +240,11 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
     if (errors.length) { setError(errors.join(' ')); return; }
     setSaving(true);
     setError('');
-    const payload = { ...form, website: normalizeUrl(form.website), portal_url: normalizeUrl(form.portal_url) };
+    const payload = {
+      ...form,
+      website:    normalizeUrl(form.website),
+      portal_url: normalizeUrl(form.portal_url),
+    };
     if (agency) {
       await supabase.from('agencies').update(payload).eq('id', agency.id);
     } else {
@@ -239,13 +283,22 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
               <input className="form-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
             </div>
             <div className="form-group">
+              <label className="form-label">Preferred Contact</label>
+              <select className="form-select" value={form.preferred_contact} onChange={e => setForm(f => ({ ...f, preferred_contact: e.target.value }))}>
+                <option value="">— Select —</option>
+                {CONTACT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
               <label className="form-label">Website</label>
               <input className="form-input" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="ytkmedia.com" />
             </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Portal URL</label>
-            <input className="form-input" value={form.portal_url} onChange={e => setForm(f => ({ ...f, portal_url: e.target.value }))} placeholder="creator-portal.agency.com" />
+            <div className="form-group">
+              <label className="form-label">Portal URL</label>
+              <input className="form-input" value={form.portal_url} onChange={e => setForm(f => ({ ...f, portal_url: e.target.value }))} placeholder="creator-portal.agency.com" />
+            </div>
           </div>
           <div className="form-row">
             <div className="form-group">
