@@ -102,7 +102,7 @@ const TYPE_COLOR = {
 };
 
 // ── Destination card ──────────────────────────────────────────────────────────
-function DestinationCard({ dest, onEdit, onToggle }) {
+function DestinationCard({ dest, onEdit, onToggle, canDelete, onDelete }) {
   return (
     <div className="card" style={{
       opacity: dest.is_active ? 1 : 0.45,
@@ -139,15 +139,17 @@ function DestinationCard({ dest, onEdit, onToggle }) {
         </div>
       </div>
 
-      {/* Account number / memo */}
-      {dest.account_last4 && (
-        <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace', marginBottom: 4, letterSpacing: 1 }}>
-          ···· {dest.account_last4}
-        </div>
-      )}
-      {dest.memo && (
-        <div style={{ fontSize: 11, color: '#555', marginBottom: 4, lineHeight: 1.5 }}>{dest.memo}</div>
-      )}
+      {/* Account number / memo — min-height keeps footer aligned across all cards */}
+      <div style={{ minHeight: 36 }}>
+        {dest.account_last4 && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'monospace', marginBottom: 4, letterSpacing: 1 }}>
+            ···· {dest.account_last4}
+          </div>
+        )}
+        {dest.memo && (
+          <div style={{ fontSize: 11, color: '#555', marginBottom: 4, lineHeight: 1.5 }}>{dest.memo}</div>
+        )}
+      </div>
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
@@ -155,6 +157,11 @@ function DestinationCard({ dest, onEdit, onToggle }) {
         <button className="btn btn-ghost btn-sm" onClick={onToggle}>
           {dest.is_active ? 'Deactivate' : 'Activate'}
         </button>
+        {canDelete && (
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)', marginLeft: 'auto' }} onClick={onDelete}>
+            Delete
+          </button>
+        )}
       </div>
     </div>
   );
@@ -175,17 +182,27 @@ export default function PaymentDestinationsView() {
     const [c, d] = await Promise.all([
       supabase.from('profiles').select('*').eq('role', 'creator').order('creator_name'),
       supabase.from('payment_destinations')
-        .select('*, profile:profiles(creator_name, full_name)')
+        .select('*, profile:profiles(creator_name, full_name), payout_splits(id)')
         .order('profile_id')
         .order('sort_order'),
     ]);
     setCreators(c.data || []);
-    setDestinations(d.data || []);
+    const dests = (d.data || []).map(dest => ({
+      ...dest,
+      hasPayouts: (dest.payout_splits || []).length > 0,
+    }));
+    setDestinations(dests);
     setLoading(false);
   }
 
   async function toggleActive(d) {
     await supabase.from('payment_destinations').update({ is_active: !d.is_active }).eq('id', d.id);
+    fetchAll();
+  }
+
+  async function deleteDestination(d) {
+    if (!window.confirm(`Delete "${d.name}"? This cannot be undone.`)) return;
+    await supabase.from('payment_destinations').delete().eq('id', d.id);
     fetchAll();
   }
 
@@ -239,6 +256,8 @@ export default function PaymentDestinationsView() {
                       dest={dest}
                       onEdit={() => { setEditing(dest); setShowModal(true); }}
                       onToggle={() => toggleActive(dest)}
+                      canDelete={!dest.hasPayouts}
+                      onDelete={() => deleteDestination(dest)}
                     />
                   ))}
                 </div>
