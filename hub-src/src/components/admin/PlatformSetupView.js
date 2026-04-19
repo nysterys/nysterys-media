@@ -517,7 +517,13 @@ function PlatformAccountModal({ account, creators, existingAccounts, defaultPlat
     } else {
       ({ error: err } = await supabase.from('platform_accounts').insert(payload));
     }
-    if (err) { setError(err.message); setSaving(false); return; }
+    if (err) {
+      setError(err.code === '23505'
+        ? `This creator already has a ${form.platform} account linked.`
+        : err.message);
+      setSaving(false);
+      return;
+    }
     onSaved();
   }
 
@@ -533,7 +539,20 @@ function PlatformAccountModal({ account, creators, existingAccounts, defaultPlat
           <div className="form-group">
             <label className="form-label">Creator *</label>
             <select className="form-select" value={form.profile_id}
-              onChange={e => setForm(f => ({ ...f, profile_id: e.target.value }))}
+              onChange={e => {
+                const newProfileId = e.target.value;
+                const taken = existingAccounts
+                  .filter(a => a.profile_id === newProfileId && a.id !== account?.id)
+                  .map(a => a.platform);
+                const available = PLATFORM_OPTIONS.filter(p => !taken.includes(p.value));
+                setForm(f => ({
+                  ...f,
+                  profile_id: newProfileId,
+                  platform: taken.includes(f.platform)
+                    ? (available[0]?.value || f.platform)
+                    : f.platform,
+                }));
+              }}
               disabled={!!account}>
               <option value="">Select creator...</option>
               {creators.map(c => <option key={c.id} value={c.id}>{c.creator_name || c.full_name}</option>)}
