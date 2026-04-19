@@ -3,12 +3,11 @@ import Sidebar from '../components/shared/Sidebar';
 import AdminOverview from '../components/admin/AdminOverview';
 import CampaignsView from '../components/admin/CampaignsView';
 import AgenciesView from '../components/admin/AgenciesView';
-import PlatformsView from '../components/admin/PlatformsView';
 import DeliverablesTypesView from '../components/admin/DeliverablesTypesView';
 import PaymentsView from '../components/admin/PaymentsView';
 import UsersView from '../components/admin/UsersView';
 import AnalyticsView from '../components/admin/AnalyticsView';
-import PlatformAccountsView from '../components/admin/PlatformAccountsView';
+import PlatformSetupView from '../components/admin/PlatformSetupView';
 import PaymentSetupView from '../components/admin/PaymentSetupView';
 import CalendarView from '../components/admin/CalendarView';
 import RewardsView from '../components/admin/RewardsView';
@@ -31,10 +30,9 @@ const NAV = [
     label: 'Setup',
     items: [
       { view: 'agencies',          icon: '⬡', label: 'Agencies & Labels' },
-      { view: 'platforms',         icon: '◻', label: 'Platforms' },
+      { view: 'platform-setup',    icon: '◻', label: 'Platform Setup' },
       { view: 'deliverable-types', icon: '◈', label: 'Deliverable Types' },
       { view: 'payment-setup',     icon: '◇', label: 'Payment Setup' },
-      { view: 'platform-accounts', icon: '◎', label: 'Platform Accounts' },
       { view: 'users',             icon: '○', label: 'Users' },
     ]
   }
@@ -53,10 +51,9 @@ export default function AdminDashboard() {
       case 'analytics':        return <AnalyticsView />;
       case 'campaign-flow':    return <CampaignFlowView />;
       case 'agencies':         return <AgenciesView />;
-      case 'platforms':        return <PlatformsView />;
+      case 'platform-setup':   return <PlatformSetupView />;
       case 'deliverable-types':return <DeliverablesTypesView />;
       case 'payment-setup':    return <PaymentSetupView />;
-      case 'platform-accounts':return <PlatformAccountsView />;
       case 'users':            return <UsersView />;
       default:                 return <AdminOverview setActiveView={setActiveView} />;
     }
