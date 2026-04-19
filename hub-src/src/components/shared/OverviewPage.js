@@ -60,9 +60,9 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
   const thL = { ...thS, textAlign: 'left' };
 
   const Dash = () => <span style={{ color: 'var(--text-dim)' }}>—</span>;
-  const Num  = ({ v, color, italic }) =>
+  const Num  = ({ v, color }) =>
     (!v || v === 0) ? <Dash /> :
-    <span style={{ color, fontStyle: italic ? 'italic' : 'normal' }}>{fmtMoney(v)}</span>;
+    <span style={{ color }}>{fmtMoney(v)}</span>;
 
   function RewardGroupRow({ g, i, isLast }) {
     const gross   = g.entries.reduce((s, e) => s + (e.gross_amount || 0), 0);
@@ -116,7 +116,7 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
             <td style={ns('var(--accent)')}><Num v={paidOut} color="var(--accent)" /></td>
             <td style={ns('var(--orange)')}><Num v={pendPayout} color="var(--orange)" /></td>
             <td style={ns('var(--red)')}><Num v={fees} color="var(--red)" /></td>
-            <td style={{ ...ds, fontStyle: 'italic' }}><Num v={inKind} color="var(--text-muted)" italic /></td>
+            <td style={ds}><Num v={inKind} color="var(--text-muted)" /></td>
           </tr>
           {rewardGroups.map((g, i) => (
             <RewardGroupRow key={`${g.platform}-${g.program}`} g={g} i={i} isLast={i === rewardGroups.length - 1} />
@@ -130,7 +130,7 @@ function FinancialTable({ summaryRows, rewardRows, period, isAdmin }) {
               <td style={ns('var(--accent)')}><Num v={tPaid} color="var(--accent)" /></td>
               <td style={ns('var(--orange)')}><Num v={tPend} color="var(--orange)" /></td>
               <td style={ns('var(--red)')}><Num v={tFees} color="var(--red)" /></td>
-              <td style={{ ...ds, fontStyle: 'italic' }}><Num v={inKind} color="var(--text-muted)" italic /></td>
+              <td style={ds}><Num v={inKind} color="var(--text-muted)" /></td>
             </tr>
           )}
         </tbody>
@@ -416,8 +416,8 @@ export default function OverviewPage({ isAdmin, profileId, creatorName, setActiv
                           </div>
                         ) : <span className="text-muted">—</span>}
                       </td>
-                      <td>{ik ? <span style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text-muted)' }}>In Kind</span> : inv ? <Badge status={inv.payment_status} /> : <span className="text-muted text-xs">No invoice</span>}</td>
-                      <td>{ik ? <span style={{ fontSize: 11, fontStyle: 'italic', color: 'var(--text-muted)' }}>N/A</span> : payout ? <Badge status={payout.payout_status} /> : <span className="text-muted text-xs">—</span>}</td>
+                      <td>{ik ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>In Kind</span> : inv ? <Badge status={inv.payment_status} /> : <span className="text-muted text-xs">No invoice</span>}</td>
+                      <td>{ik ? <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>N/A</span> : payout ? <Badge status={payout.payout_status} /> : <span className="text-muted text-xs">—</span>}</td>
                     </tr>
                   );
                 })}
@@ -454,7 +454,7 @@ export default function OverviewPage({ isAdmin, profileId, creatorName, setActiv
                     <td>{c.campaign_deliverables?.length || <span className="text-muted">—</span>}</td>
                     <td>{fmtDate(c.campaign_start_date) || <span className="text-muted">—</span>}</td>
                     <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                      {isInKind(c.invoices?.[0]?.payment_method) ? <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>In Kind</span> : fmtMoney(c.contracted_rate)}
+                      {isInKind(c.invoices?.[0]?.payment_method) ? <span style={{ color: 'var(--text-muted)' }}>In Kind</span> : fmtMoney(c.contracted_rate)}
                     </td>
                   </tr>
                 ))}
