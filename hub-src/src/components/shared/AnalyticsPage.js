@@ -214,7 +214,7 @@ function MilestoneTable({ rows }) {
     if (model.slope <= 0) return null;
     const x = (target - model.intercept) / model.slope;
     const days = Math.round(x - (n - 1));
-    return days > 0 ? days : null;
+    return days > 0 && isFinite(days) && days < 36500 ? days : null;
   }
 
   const daily30 = n >= 31
