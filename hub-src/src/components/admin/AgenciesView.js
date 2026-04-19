@@ -72,13 +72,13 @@ export default function AgenciesView() {
         <div className="table-wrap">
           <table style={{ tableLayout: 'fixed', width: '100%' }}>
             <colgroup>
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: '14%' }} />
-              <col style={{ width: 90 }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '13%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: 130 }} />
               <col />
               <col style={{ width: 90 }} />
-              <col style={{ width: '18%' }} />
+              <col style={{ width: 160 }} />
             </colgroup>
             <thead>
               <tr><th>Name</th><th>Contact</th><th>Email</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
@@ -95,8 +95,8 @@ export default function AgenciesView() {
                       ) : a.name}
                     </td>
                     <td>{a.contact_name || <span className="text-muted">—</span>}</td>
-                    <td style={{ fontSize: 12 }}>{a.email || <span className="text-muted">—</span>}</td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.email || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
                     <td>
                       {hasStats ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
