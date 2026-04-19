@@ -157,21 +157,27 @@ export default function PlatformSetupView() {
   const [usageCounts, setUsageCounts] = useState({});
   const [accounts, setAccounts]       = useState([]);
   const [creators, setCreators]       = useState([]);
+  const [delivTypes, setDelivTypes]   = useState([]);
+  const [delivUsage, setDelivUsage]   = useState({});
   const [loading, setLoading]         = useState(true);
 
   const [showPlatformModal, setShowPlatformModal] = useState(false);
   const [showAccountModal, setShowAccountModal]   = useState(false);
   const [editingAccount, setEditingAccount]       = useState(null);
   const [defaultPlatform, setDefaultPlatform]     = useState('');
+  const [showTypeModal, setShowTypeModal]         = useState(false);
+  const [editingType, setEditingType]             = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const [pRes, dRes, aRes, cRes] = await Promise.all([
+    const [pRes, dRes, aRes, cRes, tRes, tuRes] = await Promise.all([
       supabase.from('platforms').select('*').order('name'),
       supabase.from('campaign_deliverables').select('platform_id').not('platform_id', 'is', null),
       supabase.from('platform_accounts').select('*, profile:profiles(full_name, creator_name)').order('platform').order('created_at'),
       supabase.from('profiles').select('*').eq('role', 'creator').order('creator_name'),
+      supabase.from('deliverable_types').select('*').order('name'),
+      supabase.from('campaign_deliverables').select('deliverable_type_id').not('deliverable_type_id', 'is', null),
     ]);
     setPlatforms(pRes.data || []);
     const counts = {};
@@ -179,6 +185,10 @@ export default function PlatformSetupView() {
     setUsageCounts(counts);
     setAccounts(aRes.data || []);
     setCreators(cRes.data || []);
+    setDelivTypes(tRes.data || []);
+    const typeCounts = {};
+    for (const d of (tuRes.data || [])) typeCounts[d.deliverable_type_id] = (typeCounts[d.deliverable_type_id] || 0) + 1;
+    setDelivUsage(typeCounts);
     setLoading(false);
   }
 
@@ -210,6 +220,17 @@ export default function PlatformSetupView() {
     setShowAccountModal(true);
   }
 
+  async function toggleType(t) {
+    await supabase.from('deliverable_types').update({ is_active: !t.is_active }).eq('id', t.id);
+    fetchAll();
+  }
+
+  async function deleteType(t) {
+    if (!window.confirm(`Delete "${t.name}"? This cannot be undone.`)) return;
+    await supabase.from('deliverable_types').delete().eq('id', t.id);
+    fetchAll();
+  }
+
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
   // Group accounts by platform name (platform_accounts.platform is lowercase)
@@ -230,9 +251,10 @@ export default function PlatformSetupView() {
       <div className="page-header">
         <div>
           <div className="page-title">PLATFORM SETUP</div>
-          <div className="page-subtitle">Platform definitions and creator account links</div>
+          <div className="page-subtitle">Platforms, account links, and deliverable types</div>
         </div>
         <div className="flex gap-8">
+          <button className="btn btn-ghost" onClick={() => { setEditingType(null); setShowTypeModal(true); }}>+ Add Type</button>
           <button className="btn btn-ghost" onClick={() => setShowPlatformModal(true)}>+ Add Platform</button>
           <button className="btn btn-primary" onClick={() => { setDefaultPlatform(''); setEditingAccount(null); setShowAccountModal(true); }}>+ Link Account</button>
         </div>
@@ -406,6 +428,66 @@ export default function PlatformSetupView() {
         </div>
       )}
 
+      {/* ── Deliverable Types ── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>
+          Deliverable Types
+        </div>
+        {delivTypes.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-title">No deliverable types yet</div>
+            <div className="empty-state-text">Add types like Video, Reel, Story, Carousel...</div>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <colgroup>
+                <col style={{ width: '28%' }} />
+                <col />
+                <col style={{ width: 90 }} />
+                <col style={{ width: 100 }} />
+                <col />
+              </colgroup>
+              <thead>
+                <tr><th>Type</th><th>Description</th><th>Usage</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                {delivTypes.map(t => {
+                  const count = delivUsage[t.id] || 0;
+                  return (
+                    <tr key={t.id} style={{ opacity: t.is_active ? 1 : 0.5 }}>
+                      <td style={{ fontWeight: 500 }}>{t.name}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.description || <span className="text-muted">—</span>}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {count > 0 ? `${count} deliverable${count !== 1 ? 's' : ''}` : <span className="text-muted">—</span>}
+                      </td>
+                      <td>
+                        <span className={`badge ${t.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                          {t.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex gap-8">
+                          {count === 0 && (
+                            <button className="btn btn-ghost btn-sm" onClick={() => { setEditingType(t); setShowTypeModal(true); }}>Edit</button>
+                          )}
+                          <button className="btn btn-ghost btn-sm" onClick={() => toggleType(t)}>
+                            {t.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          {count === 0 && (
+                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deleteType(t)}>Delete</button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {showPlatformModal && (
         <AddPlatformModal
           currentPlatforms={platforms}
@@ -422,6 +504,14 @@ export default function PlatformSetupView() {
           defaultPlatform={defaultPlatform}
           onClose={() => setShowAccountModal(false)}
           onSaved={() => { setShowAccountModal(false); fetchAll(); }}
+        />
+      )}
+
+      {showTypeModal && (
+        <DeliverableTypeModal
+          type={editingType}
+          onClose={() => setShowTypeModal(false)}
+          onSaved={() => { setShowTypeModal(false); fetchAll(); }}
         />
       )}
     </div>
@@ -596,6 +686,64 @@ function PlatformAccountModal({ account, creators, existingAccounts, defaultPlat
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? 'Saving...' : account ? 'Save' : 'Link Account'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Deliverable type modal ─────────────────────────────────────────────────────
+function DeliverableTypeModal({ type, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name:        type?.name        || '',
+    description: type?.description || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  async function save() {
+    const name = form.name.trim();
+    if (!name) { setError('Name is required.'); return; }
+    setSaving(true); setError('');
+    const payload = { name, description: form.description.trim() || null };
+    if (type) {
+      const { error: err } = await supabase.from('deliverable_types').update(payload).eq('id', type.id);
+      if (err) { setError(err.message); setSaving(false); return; }
+    } else {
+      const { error: err } = await supabase.from('deliverable_types').insert(payload);
+      if (err) { setError(err.message); setSaving(false); return; }
+    }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-header">
+          <div className="modal-title">{type ? 'EDIT DELIVERABLE TYPE' : 'ADD DELIVERABLE TYPE'}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
+          <div className="form-group">
+            <label className="form-label">Name *</label>
+            <input className="form-input" value={form.name} autoFocus
+              onChange={e => { setForm(f => ({ ...f, name: e.target.value })); setError(''); }}
+              onKeyDown={e => e.key === 'Enter' && save()}
+              placeholder="Video, Reel, Story, Carousel..." />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <input className="form-input" value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="Optional description" />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !form.name.trim()}>
+            {saving ? 'Saving...' : type ? 'Save' : 'Add Type'}
           </button>
         </div>
       </div>

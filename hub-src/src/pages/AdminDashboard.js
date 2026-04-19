@@ -3,7 +3,6 @@ import Sidebar from '../components/shared/Sidebar';
 import AdminOverview from '../components/admin/AdminOverview';
 import CampaignsView from '../components/admin/CampaignsView';
 import AgenciesView from '../components/admin/AgenciesView';
-import DeliverablesTypesView from '../components/admin/DeliverablesTypesView';
 import PaymentsView from '../components/admin/PaymentsView';
 import UsersView from '../components/admin/UsersView';
 import AnalyticsView from '../components/admin/AnalyticsView';
@@ -31,7 +30,6 @@ const NAV = [
     items: [
       { view: 'agencies',          icon: '⬡', label: 'Agencies & Labels' },
       { view: 'platform-setup',    icon: '◻', label: 'Platform Setup' },
-      { view: 'deliverable-types', icon: '◈', label: 'Deliverable Types' },
       { view: 'payment-setup',     icon: '◇', label: 'Payment Setup' },
       { view: 'users',             icon: '○', label: 'Users' },
     ]
@@ -52,7 +50,6 @@ export default function AdminDashboard() {
       case 'campaign-flow':    return <CampaignFlowView />;
       case 'agencies':         return <AgenciesView />;
       case 'platform-setup':   return <PlatformSetupView />;
-      case 'deliverable-types':return <DeliverablesTypesView />;
       case 'payment-setup':    return <PaymentSetupView />;
       case 'users':            return <UsersView />;
       default:                 return <AdminOverview setActiveView={setActiveView} />;
