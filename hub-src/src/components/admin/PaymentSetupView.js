@@ -252,7 +252,7 @@ export default function PaymentSetupView() {
         .order('profile_id').order('sort_order'),
       supabase.from('profiles').select('*').eq('role', 'creator').order('creator_name'),
       supabase.from('payment_terms').select('*').order('sort_order').order('name'),
-      supabase.from('agencies').select('payment_terms'),
+      supabase.from('agencies').select('payment_term_id'),
     ]);
     setMethods(mRes.data || []);
     const counts = {};
@@ -266,9 +266,8 @@ export default function PaymentSetupView() {
     setTerms(tRes.data || []);
     const tUsage = {};
     for (const a of (aRes.data || [])) {
-      const key = (a.payment_terms || '').trim().toLowerCase();
-      if (!key) continue;
-      tUsage[key] = (tUsage[key] || 0) + 1;
+      if (!a.payment_term_id) continue;
+      tUsage[a.payment_term_id] = (tUsage[a.payment_term_id] || 0) + 1;
     }
     setTermsUsage(tUsage);
     setLoading(false);
@@ -496,7 +495,7 @@ export default function PaymentSetupView() {
             </thead>
             <tbody>
               {terms.map(t => {
-                const count = termsUsage[(t.name || '').trim().toLowerCase()] || 0;
+                const count = termsUsage[t.id] || 0;
                 return (
                   <tr key={t.id} style={{ opacity: t.is_active ? 1 : 0.5 }}>
                     <td />

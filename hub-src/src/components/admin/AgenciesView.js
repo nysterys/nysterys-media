@@ -61,10 +61,10 @@ export default function AgenciesView() {
         'creator:profiles!campaigns_creator_profile_id_fkey(creator_name, full_name), ' +
         'campaign_deliverables(id)'
       ),
-      supabase.from('payment_terms').select('name').eq('is_active', true).order('sort_order').order('name'),
+      supabase.from('payment_terms').select('id, name').eq('is_active', true).order('sort_order').order('name'),
     ]);
     setAgencies(aRes.data || []);
-    setPaymentTerms((tRes.data || []).map(t => t.name));
+    setPaymentTerms(tRes.data || []);
 
     const map = {};
     for (const c of (cRes.data || [])) {
@@ -169,7 +169,9 @@ export default function AgenciesView() {
                     <td style={{ paddingLeft: 0 }}>
                       <ContactMethodIcon method={a.preferred_contact} />
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {paymentTerms.find(t => t.id === a.payment_term_id)?.name || <span className="text-muted">—</span>}
+                    </td>
                     <td>
                       {hasStats ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -226,7 +228,7 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
     preferred_contact:  agency?.preferred_contact  || '',
     website:            agency?.website            || '',
     portal_url:         agency?.portal_url         || '',
-    payment_terms:      agency?.payment_terms      || paymentTerms[0] || '',
+    payment_term_id:    agency?.payment_term_id    || paymentTerms[0]?.id || '',
     notes:              agency?.notes              || '',
   });
   const [saving, setSaving] = useState(false);
@@ -309,9 +311,9 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Payment Terms</label>
-              <select className="form-select" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
+              <select className="form-select" value={form.payment_term_id} onChange={e => setForm(f => ({ ...f, payment_term_id: e.target.value }))}>
                 <option value="">— Select —</option>
-                {paymentTerms.map(t => <option key={t} value={t}>{t}</option>)}
+                {paymentTerms.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
           </div>
