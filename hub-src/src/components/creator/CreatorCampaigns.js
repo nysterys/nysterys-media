@@ -817,18 +817,19 @@ function VideoPickerSelect({ campaign, currentPostUrl, onSelect }) {
   async function loadVideos() {
     setLoading(true);
     const { data: acct } = await supabase
-      .from('tiktok_accounts')
-      .select('tiktok_username')
+      .from('platform_accounts')
+      .select('username')
       .eq('profile_id', profile.id)
+      .eq('platform', 'tiktok')
       .eq('is_active', true)
       .single();
 
-    if (!acct?.tiktok_username) { setLoading(false); return; }
+    if (!acct?.username) { setLoading(false); return; }
 
     let query = supabase
       .from('tiktok_video_insights_view')
       .select('video_id, video_title, create_time, share_url')
-      .eq('tiktok_username', acct.tiktok_username)
+      .eq('tiktok_username', acct.username)
       .order('create_time', { ascending: false });
 
     if (campaign.campaign_start_date) query = query.gte('create_time', campaign.campaign_start_date);

@@ -481,16 +481,18 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
   async function fetchAccounts() {
     if (isAdmin) {
       const { data: accs } = await supabase
-        .from('tiktok_accounts')
+        .from('platform_accounts')
         .select('*, profile:profiles(full_name, creator_name)')
+        .eq('platform', 'tiktok')
         .eq('is_active', true);
       setAccounts(accs || []);
       if (accs?.length > 0) setSelectedAccount(accs[0]);
     } else {
       const { data: acc } = await supabase
-        .from('tiktok_accounts')
+        .from('platform_accounts')
         .select('*')
         .eq('profile_id', creatorProfileId)
+        .eq('platform', 'tiktok')
         .eq('is_active', true)
         .single();
       setAccounts(acc ? [acc] : []);
@@ -502,7 +504,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
   async function fetchData() {
     if (!selectedAccount) return;
     setLoading(true);
-    const username = selectedAccount.tiktok_username;
+    const username = selectedAccount.username;
 
     const [profileRes, genderRes, countryRes, hourlyRes, videoRes, campaignRes] = await Promise.all([
       // All history — trend chart, milestones, and KPI tiles (period-filtered client-side)
@@ -656,7 +658,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
           <div className="page-subtitle">
             {isAdmin
               ? 'TikTok performance data via Coupler.io'
-              : `@${selectedAccount?.tiktok_username}`}
+              : `@${selectedAccount?.username}`}
           </div>
         </div>
         <div className="flex gap-8 items-center">
@@ -668,7 +670,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
                   className={`filter-chip ${selectedAccount?.id === a.id ? 'active' : ''}`}
                   onClick={() => setSelectedAccount(a)}
                 >
-                  {a.profile?.creator_name || a.tiktok_username}
+                  {a.profile?.creator_name || a.username}
                 </button>
               ))}
             </div>
@@ -680,7 +682,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
       {loading ? (
         <div className="text-muted">Loading analytics...</div>
       ) : profileAllClean.length === 0 ? (
-        <NoDataState username={selectedAccount?.tiktok_username} />
+        <NoDataState username={selectedAccount?.username} />
       ) : (
         <>
           {/* KPI tiles */}
