@@ -230,11 +230,14 @@ export function StatTile({ label, value, sub, color, trend }) {
 }
 
 // Section wrapper
-export function ChartCard({ title, children, action }) {
+export function ChartCard({ title, subtitle, children, action }) {
   return (
     <div className="card" style={{ marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div className="card-title" style={{ margin: 0 }}>{title}</div>
+        <div>
+          <div className="card-title" style={{ margin: 0 }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{subtitle}</div>}
+        </div>
         {action}
       </div>
       {children}

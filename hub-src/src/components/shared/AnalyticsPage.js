@@ -632,9 +632,9 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
     });
   const maxCountryPct = Math.max(...topCountries.map(c => c.percentage || 0), 1);
 
-  // Hourly: normalise to 0-100
+  // Hourly: filter by period (hourly view has a date column), then normalise to 0-100
   const hourlyMap = {};
-  data?.hourly?.forEach(h => {
+  (data?.hourly || []).filter(h => inPeriod(h.date, period)).forEach(h => {
     const hr = parseInt(h.hour, 10);
     if (!hourlyMap[hr]) hourlyMap[hr] = [];
     hourlyMap[hr].push(Number(h.activity_score) || 0);
@@ -761,7 +761,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
 
           {/* Audience */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <ChartCard title="AUDIENCE GENDER">
+            <ChartCard title="AUDIENCE GENDER" subtitle="current snapshot">
               {genderAvg.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
@@ -773,7 +773,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
                 </div>
               ) : <DonutChart segments={genderAvg} size={160} />}
             </ChartCard>
-            <ChartCard title="TOP COUNTRIES">
+            <ChartCard title="TOP COUNTRIES" subtitle="current snapshot">
               {topCountries.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
