@@ -12,27 +12,42 @@ function MethodLogo({ name, size = 42 }) {
   if (n.includes('direct deposit') || n.includes('direct')) return <DirectDepositLogo size={size} />;
   if (n.includes('venmo'))                               return <VenmoLogo size={size} />;
   if (n.includes('cash'))                                return <CashLogo size={size} />;
+  if (n.includes('stripe'))                              return <StripeLogo size={size} />;
   return <GenericMethodLogo size={size} label={(name || '?').slice(0, 2).toUpperCase()} />;
 }
 
-// PayPal: deep navy with PP
+// PayPal: white background with the iconic double-P mark
 function PayPalLogo({ size }) {
   return (
     <svg width={size} height={size} viewBox="0 0 42 42" style={{ borderRadius: 8, flexShrink: 0 }}>
-      <rect width="42" height="42" fill="#003087" rx="8"/>
-      <text x="21" y="27" textAnchor="middle"
-        style={{ fontSize: 15, fontWeight: 800, fill: '#009CDE', fontFamily: 'Arial, sans-serif', letterSpacing: -1 }}>PP</text>
+      <rect width="42" height="42" fill="#F5F7FA" rx="8"/>
+      {/* Dark navy P (back) */}
+      <path d="M15 10 L22 10 C26.5 10 29 12.5 28.5 16.5 C28 20.5 25 23 21 23 L18.5 23 L17 30 L13 30 Z" fill="#003087"/>
+      {/* Cyan P (front, offset down-right) */}
+      <path d="M17.5 16 L24.5 16 C29 16 31.5 18.5 31 22.5 C30.5 26.5 27.5 29 23.5 29 L21 29 L19.5 36 L15.5 36 Z" fill="#009CDE"/>
+      {/* White cutout to create the P bowl on back layer */}
+      <path d="M18.5 14 L22 14 C24 14 25 15 24.8 17 C24.5 19 23 20 21 20 L19 20 Z" fill="#F5F7FA"/>
+      {/* White cutout to create the P bowl on front layer */}
+      <path d="M21 20 L24.5 20 C26.5 20 27.5 21 27.3 23 C27 25 25.5 26 23.5 26 L21.5 26 Z" fill="#F5F7FA"/>
     </svg>
   );
 }
 
-// Zelle: purple Z
+// Zelle: bright purple with the Z dollar-sign mark (horizontal bars top + bottom)
 function ZelleLogo({ size }) {
   return (
     <svg width={size} height={size} viewBox="0 0 42 42" style={{ borderRadius: 8, flexShrink: 0 }}>
       <rect width="42" height="42" fill="#6D1ED4" rx="8"/>
-      <text x="21" y="29" textAnchor="middle"
-        style={{ fontSize: 22, fontWeight: 700, fill: 'white', fontFamily: 'Arial, sans-serif' }}>Z</text>
+      {/* Top horizontal bar */}
+      <rect x="13" y="9" width="16" height="4" rx="1.5" fill="white"/>
+      {/* Top cap (vertical stub) */}
+      <rect x="19" y="7" width="4" height="6" rx="1" fill="white"/>
+      {/* Z diagonal — rendered as a thick angled path */}
+      <polygon points="27,13 29,13 15,29 13,29" fill="white"/>
+      {/* Bottom horizontal bar */}
+      <rect x="13" y="29" width="16" height="4" rx="1.5" fill="white"/>
+      {/* Bottom cap (vertical stub) */}
+      <rect x="19" y="29" width="4" height="6" rx="1" fill="white"/>
     </svg>
   );
 }
@@ -107,6 +122,16 @@ function CashLogo({ size }) {
       <rect width="42" height="42" fill="#14532d" rx="8"/>
       <text x="21" y="29" textAnchor="middle"
         style={{ fontSize: 22, fontWeight: 700, fill: '#4ade80', fontFamily: 'Georgia, serif' }}>$</text>
+    </svg>
+  );
+}
+
+// Stripe: periwinkle blue with bold rounded white S
+function StripeLogo({ size }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 42 42" style={{ borderRadius: 8, flexShrink: 0 }}>
+      <rect width="42" height="42" fill="#635BFF" rx="8"/>
+      <path d="M23.5 13.5 C19 13.5 16.5 15.8 16.5 19 C16.5 25.5 25.5 23.5 25.5 26.5 C25.5 28 24 28.8 21.5 28.8 C18.5 28.8 16 27.5 16 27.5 L16 27.5 L16 27.5 C16 27.5 16.5 29.5 16.5 29.5 C16.5 29.5 18.8 30.5 21.8 30.5 C26.5 30.5 29 28.2 29 24.8 C29 18 20 20.2 20 17 C20 15.8 21.2 15 23.2 15 C25.8 15 27.8 16 27.8 16 L27.8 16 Z" fill="white"/>
     </svg>
   );
 }
