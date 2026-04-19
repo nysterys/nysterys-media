@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import LoginPage from './pages/LoginPage';
 import AdminDashboard from './pages/AdminDashboard';
 import CreatorDashboard from './pages/CreatorDashboard';
 import './App.css';
+
+export const IdleContext = createContext({ secondsLeft: null });
+export function useIdle() { return useContext(IdleContext); }
 
 function IdleWarning({ countdown, onStayLoggedIn }) {
   return (
@@ -38,7 +41,7 @@ function IdleWarning({ countdown, onStayLoggedIn }) {
 
 function AppInner() {
   const { user, profile, loading, signOut } = useAuth();
-  const { showWarning, countdown, stayLoggedIn } = useIdleTimeout({ profile, signOut });
+  const { showWarning, countdown, stayLoggedIn, secondsLeft } = useIdleTimeout({ profile, signOut });
 
   if (loading) {
     return (
@@ -52,10 +55,10 @@ function AppInner() {
   if (!user || !profile) return <LoginPage />;
 
   return (
-    <>
+    <IdleContext.Provider value={{ secondsLeft }}>
       {profile.role === 'admin' ? <AdminDashboard /> : <CreatorDashboard />}
       {showWarning && <IdleWarning countdown={countdown} onStayLoggedIn={stayLoggedIn} />}
-    </>
+    </IdleContext.Provider>
   );
 }
 
