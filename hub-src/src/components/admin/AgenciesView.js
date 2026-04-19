@@ -4,7 +4,8 @@ import { isValidEmail } from '../../utils/format';
 
 export default function AgenciesView() {
   const [agencies, setAgencies]   = useState([]);
-  const [statsMap, setStatsMap]   = useState({});  // agencyId → { creatorId → { name, campaigns, posts } }
+  const [statsMap, setStatsMap]   = useState({});
+  const [paymentTerms, setPaymentTerms] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState(null);
@@ -12,15 +13,17 @@ export default function AgenciesView() {
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const [aRes, cRes] = await Promise.all([
+    const [aRes, cRes, tRes] = await Promise.all([
       supabase.from('agencies').select('*').order('name'),
       supabase.from('campaigns').select(
         'id, agency_id, creator_profile_id, ' +
         'creator:profiles!campaigns_creator_profile_id_fkey(creator_name, full_name), ' +
         'campaign_deliverables(id)'
       ),
+      supabase.from('payment_terms').select('name').eq('is_active', true).order('sort_order').order('name'),
     ]);
     setAgencies(aRes.data || []);
+    setPaymentTerms((tRes.data || []).map(t => t.name));
 
     // Build statsMap: agencyId → { creatorId → { name, campaigns, posts } }
     const map = {};
@@ -132,6 +135,7 @@ export default function AgenciesView() {
       {showModal && (
         <AgencyModal
           agency={editing}
+          paymentTerms={paymentTerms}
           onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); fetchAll(); }}
         />
@@ -140,14 +144,14 @@ export default function AgenciesView() {
   );
 }
 
-function AgencyModal({ agency, onClose, onSaved }) {
+function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
   const [form, setForm] = useState({
     name:          agency?.name          || '',
     contact_name:  agency?.contact_name  || '',
     email:         agency?.email         || '',
     phone:         agency?.phone         || '',
     website:       agency?.website       || '',
-    payment_terms: agency?.payment_terms || 'Net 30',
+    payment_terms: agency?.payment_terms || paymentTerms[0] || '',
     notes:         agency?.notes         || '',
   });
   const [saving, setSaving] = useState(false);
@@ -214,11 +218,8 @@ function AgencyModal({ agency, onClose, onSaved }) {
             <div className="form-group">
               <label className="form-label">Payment Terms</label>
               <select className="form-select" value={form.payment_terms} onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))}>
-                <option>Upon Receipt</option>
-                <option>Net 15</option>
-                <option>Net 30</option>
-                <option>Net 60</option>
-                <option>Net 90</option>
+                <option value="">— Select —</option>
+                {paymentTerms.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>

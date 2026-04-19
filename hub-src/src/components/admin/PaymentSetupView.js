@@ -212,27 +212,47 @@ const TYPE_COLOR = {
   Other:      'var(--muted)',
 };
 
+// ── Section divider ────────────────────────────────────────────────────────────
+function SectionHeader({ title, subtitle, first = false, action }) {
+  return (
+    <div style={{ marginTop: first ? 0 : 48, paddingTop: first ? 0 : 32, borderTop: first ? 'none' : '2px solid var(--border)', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 3, height: 18, background: 'var(--accent)', borderRadius: 2, flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{title}</span>
+        {subtitle && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{subtitle}</span>}
+        {action && <div style={{ marginLeft: 'auto' }}>{action}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 export default function PaymentSetupView() {
   const [methods, setMethods]           = useState([]);
   const [usageCounts, setUsageCounts]   = useState({});
   const [destinations, setDestinations] = useState([]);
   const [creators, setCreators]         = useState([]);
+  const [terms, setTerms]               = useState([]);
+  const [termsUsage, setTermsUsage]     = useState({});
   const [loading, setLoading]           = useState(true);
   const [showMethodModal, setShowMethodModal]   = useState(false);
   const [showDestModal, setShowDestModal]       = useState(false);
   const [editingDest, setEditingDest]           = useState(null);
+  const [showTermModal, setShowTermModal]       = useState(false);
+  const [editingTerm, setEditingTerm]           = useState(null);
 
   useEffect(() => { fetchAll(); }, []);
 
   async function fetchAll() {
-    const [mRes, iRes, dRes, cRes] = await Promise.all([
+    const [mRes, iRes, dRes, cRes, tRes, aRes] = await Promise.all([
       supabase.from('payment_methods').select('*').order('sort_order').order('name'),
       supabase.from('invoices').select('payment_method'),
       supabase.from('payment_destinations')
         .select('*, profile:profiles(creator_name, full_name), payout_splits(id)')
         .order('profile_id').order('sort_order'),
       supabase.from('profiles').select('*').eq('role', 'creator').order('creator_name'),
+      supabase.from('payment_terms').select('*').order('sort_order').order('name'),
+      supabase.from('agencies').select('payment_terms'),
     ]);
     setMethods(mRes.data || []);
     const counts = {};
@@ -243,6 +263,13 @@ export default function PaymentSetupView() {
     setUsageCounts(counts);
     setDestinations((dRes.data || []).map(d => ({ ...d, hasPayouts: (d.payout_splits || []).length > 0 })));
     setCreators(cRes.data || []);
+    setTerms(tRes.data || []);
+    const tUsage = {};
+    for (const a of (aRes.data || [])) {
+      if (!a.payment_terms) continue;
+      tUsage[a.payment_terms] = (tUsage[a.payment_terms] || 0) + 1;
+    }
+    setTermsUsage(tUsage);
     setLoading(false);
   }
 
@@ -268,6 +295,17 @@ export default function PaymentSetupView() {
     fetchAll();
   }
 
+  async function toggleTerm(t) {
+    await supabase.from('payment_terms').update({ is_active: !t.is_active }).eq('id', t.id);
+    fetchAll();
+  }
+
+  async function deleteTerm(t) {
+    if (!window.confirm(`Delete "${t.name}"? This cannot be undone.`)) return;
+    await supabase.from('payment_terms').delete().eq('id', t.id);
+    fetchAll();
+  }
+
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
   return (
@@ -275,18 +313,17 @@ export default function PaymentSetupView() {
       <div className="page-header">
         <div>
           <div className="page-title">PAYMENT SETUP</div>
-          <div className="page-subtitle">Methods and payout destinations</div>
+          <div className="page-subtitle">Methods, terms, and payout destinations</div>
         </div>
         <div className="flex gap-8">
+          <button className="btn btn-ghost" onClick={() => { setEditingTerm(null); setShowTermModal(true); }}>+ Add Term</button>
           <button className="btn btn-ghost" onClick={() => setShowMethodModal(true)}>+ Add Method</button>
           <button className="btn btn-primary" onClick={() => { setEditingDest(null); setShowDestModal(true); }}>+ Add Destination</button>
         </div>
       </div>
 
       {/* ── Payment Methods ── */}
-      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>
-        Payment Methods
-      </div>
+      <SectionHeader first title="Payment Methods" subtitle="How agencies pay invoices" />
       {methods.length === 0 ? (
         <div className="empty-state" style={{ marginBottom: 32 }}>
           <div className="empty-state-title">No payment methods yet</div>
@@ -342,10 +379,8 @@ export default function PaymentSetupView() {
         </div>
       )}
 
-      {/* ── Payment Destinations ── */}
-      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--muted)', marginBottom: 10 }}>
-        Payout Destinations
-      </div>
+      {/* ── Payout Destinations ── */}
+      <SectionHeader title="Payout Destinations" subtitle="Creator bank accounts and investment accounts" />
       {destinations.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-title">No destinations configured</div>
@@ -434,6 +469,58 @@ export default function PaymentSetupView() {
         </div>
       )}
 
+      {/* ── Payment Terms ── */}
+      <SectionHeader title="Payment Terms" subtitle="Reusable net terms assigned to agencies" />
+      {terms.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-title">No payment terms yet</div>
+          <div className="empty-state-text">Add terms like Net 30, Upon Receipt...</div>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table style={{ tableLayout: 'fixed', width: '100%' }}>
+            <colgroup>
+              <col style={{ width: '30%' }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 90 }} />
+              <col />
+            </colgroup>
+            <thead>
+              <tr><th>Term</th><th>Usage</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              {terms.map(t => {
+                const count = termsUsage[t.name] || 0;
+                return (
+                  <tr key={t.id} style={{ opacity: t.is_active ? 1 : 0.5 }}>
+                    <td style={{ fontWeight: 500 }}>{t.name}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {count > 0 ? `${count} agenc${count !== 1 ? 'ies' : 'y'}` : <span className="text-muted">—</span>}
+                    </td>
+                    <td>
+                      <span className={`badge ${t.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                        {t.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex gap-8">
+                        <button className="btn btn-ghost btn-sm" onClick={() => { setEditingTerm(t); setShowTermModal(true); }}>Edit</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => toggleTerm(t)}>
+                          {t.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        {count === 0 && (
+                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deleteTerm(t)}>Delete</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {showMethodModal && (
         <AddMethodModal
           currentMethods={methods}
@@ -448,6 +535,14 @@ export default function PaymentSetupView() {
           creators={creators}
           onClose={() => setShowDestModal(false)}
           onSaved={() => { setShowDestModal(false); fetchAll(); }}
+        />
+      )}
+
+      {showTermModal && (
+        <PaymentTermModal
+          term={editingTerm}
+          onClose={() => setShowTermModal(false)}
+          onSaved={() => { setShowTermModal(false); fetchAll(); }}
         />
       )}
     </div>
@@ -619,6 +714,54 @@ function DestinationModal({ destination, creators, onClose, onSaved }) {
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? 'Saving...' : destination ? 'Save' : 'Add Destination'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Payment term modal ─────────────────────────────────────────────────────────
+function PaymentTermModal({ term, onClose, onSaved }) {
+  const [name, setName]     = useState(term?.name || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  async function save() {
+    const trimmed = name.trim();
+    if (!trimmed) { setError('Name is required.'); return; }
+    setSaving(true); setError('');
+    if (term) {
+      const { error: err } = await supabase.from('payment_terms').update({ name: trimmed }).eq('id', term.id);
+      if (err) { setError(err.message); setSaving(false); return; }
+    } else {
+      const { error: err } = await supabase.from('payment_terms').insert({ name: trimmed, sort_order: 0 });
+      if (err) { setError(err.message); setSaving(false); return; }
+    }
+    onSaved();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 360 }}>
+        <div className="modal-header">
+          <div className="modal-title">{term ? 'EDIT PAYMENT TERM' : 'ADD PAYMENT TERM'}</div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
+          <div className="form-group">
+            <label className="form-label">Term Name *</label>
+            <input className="form-input" value={name} autoFocus
+              onChange={e => { setName(e.target.value); setError(''); }}
+              onKeyDown={e => e.key === 'Enter' && save()}
+              placeholder="Net 30, Upon Receipt, Net 15..." />
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !name.trim()}>
+            {saving ? 'Saving...' : term ? 'Save' : 'Add Term'}
           </button>
         </div>
       </div>
