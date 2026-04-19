@@ -346,49 +346,65 @@ export default function PaymentSetupView() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th></th><th>Destination</th><th>Creator</th><th>Type</th><th>Account</th><th>Memo</th><th>Status</th><th></th></tr>
+              <tr><th style={{ width: 32 }}></th><th>Destination</th><th>Type</th><th>Account</th><th>Memo</th><th>Status</th><th></th></tr>
             </thead>
-            <tbody>
-              {destinations.map(d => (
-                <tr key={d.id} style={{ opacity: d.is_active ? 1 : 0.5 }}>
-                  <td style={{ width: 32, paddingRight: 0 }}><InstitutionLogo institution={d.institution} size={24} /></td>
-                  <td style={{ fontWeight: 500 }}>{d.name}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{d.profile?.creator_name || d.profile?.full_name || '—'}</td>
-                  <td>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: TYPE_COLOR[d.account_type] || 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {d.account_type}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
-                    {d.institution && <span>{d.institution}</span>}
-                    {d.institution && d.account_last4 && <span style={{ color: '#444' }}> · </span>}
-                    {d.account_last4 && <span>···· {d.account_last4}</span>}
-                    {!d.institution && !d.account_last4 && <span className="text-muted">—</span>}
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200 }}>
-                    {d.account_type === 'Other' ? (d.memo || <span className="text-muted">—</span>) : (d.memo || <span className="text-muted">—</span>)}
-                  </td>
-                  <td>
-                    <span className={`badge ${d.is_active ? 'badge-active' : 'badge-cancelled'}`}>
-                      {d.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="flex gap-8">
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditingDest(d); setShowDestModal(true); }}>Edit</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => toggleDest(d)}>
-                        {d.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
-                      {!d.hasPayouts && (
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deleteDest(d)}>
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            {creators.map(creator => {
+              const creatorDests = destinations.filter(d => d.profile_id === creator.id);
+              if (creatorDests.length === 0) return null;
+              return (
+                <tbody key={creator.id}>
+                  <tr style={{ background: 'var(--surface2)' }}>
+                    <td />
+                    <td colSpan={6} style={{ fontWeight: 600, fontSize: 13 }}>
+                      {creator.creator_name || creator.full_name}
+                    </td>
+                  </tr>
+                  {creatorDests.map((d, idx) => {
+                    const isLast = idx === creatorDests.length - 1;
+                    return (
+                      <tr key={d.id} style={{ opacity: d.is_active ? 1 : 0.5 }}>
+                        <td style={{ paddingRight: 0, borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <InstitutionLogo institution={d.institution} size={24} />
+                        </td>
+                        <td style={{ fontWeight: 500, borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>{d.name}</td>
+                        <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: TYPE_COLOR[d.account_type] || 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            {d.account_type}
+                          </span>
+                        </td>
+                        <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)', borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          {d.institution && <span>{d.institution}</span>}
+                          {d.institution && d.account_last4 && <span style={{ color: '#444' }}> · </span>}
+                          {d.account_last4 && <span>···· {d.account_last4}</span>}
+                          {!d.institution && !d.account_last4 && <span className="text-muted">—</span>}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200, borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          {d.memo || <span className="text-muted">—</span>}
+                        </td>
+                        <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <span className={`badge ${d.is_active ? 'badge-active' : 'badge-cancelled'}`}>
+                            {d.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td style={{ borderBottom: isLast ? '2px solid var(--surface2)' : undefined }}>
+                          <div className="flex gap-8">
+                            <button className="btn btn-ghost btn-sm" onClick={() => { setEditingDest(d); setShowDestModal(true); }}>Edit</button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => toggleDest(d)}>
+                              {d.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            {!d.hasPayouts && (
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red)' }} onClick={() => deleteDest(d)}>
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              );
+            })}
           </table>
         </div>
       )}
