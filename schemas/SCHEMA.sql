@@ -444,28 +444,36 @@ create trigger handle_updated_at before update on public.comments
   for each row execute function public.handle_updated_at();
 
 -- ============================================================
--- TIKTOK ACCOUNTS
+-- PLATFORM ACCOUNTS
 -- ============================================================
-create table public.tiktok_accounts (
+create table public.platform_accounts (
   id uuid default uuid_generate_v4() primary key,
-  profile_id uuid references public.profiles(id) on delete cascade not null unique,
-  tiktok_username text not null,
+  profile_id uuid references public.profiles(id) on delete cascade not null,
+  platform text not null,  -- 'tiktok', 'youtube', 'instagram', 'x'
+  username text not null,
   display_name text,
   is_active boolean default true,
   created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  unique(profile_id, platform)
 );
 
-alter table public.tiktok_accounts enable row level security;
+alter table public.platform_accounts enable row level security;
 
-create policy "Admin can manage tiktok accounts" on public.tiktok_accounts
+create policy "Admin can manage platform accounts" on public.platform_accounts
   for all using (public.get_my_role() = 'admin');
 
-create policy "Creators can read own tiktok account" on public.tiktok_accounts
+create policy "Creators can read own platform accounts" on public.platform_accounts
   for select using (profile_id = auth.uid());
 
-create trigger handle_updated_at before update on public.tiktok_accounts
+create trigger handle_updated_at before update on public.platform_accounts
   for each row execute function public.handle_updated_at();
+
+-- Compatibility view for analytics RLS policies that reference tiktok_accounts
+create view public.tiktok_accounts as
+  select id, profile_id, username as tiktok_username, display_name, is_active, created_at, updated_at
+  from public.platform_accounts
+  where platform = 'tiktok';
 
 -- ============================================================
 -- PAYMENT DESTINATIONS (per creator)

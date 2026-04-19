@@ -8,7 +8,7 @@ import DeliverablesTypesView from '../components/admin/DeliverablesTypesView';
 import PaymentsView from '../components/admin/PaymentsView';
 import UsersView from '../components/admin/UsersView';
 import AnalyticsView from '../components/admin/AnalyticsView';
-import TikTokAccountsView from '../components/admin/TikTokAccountsView';
+import PlatformAccountsView from '../components/admin/PlatformAccountsView';
 import PaymentDestinationsView from '../components/admin/PaymentDestinationsView';
 import PaymentMethodsView from '../components/admin/PaymentMethodsView';
 import CalendarView from '../components/admin/CalendarView';
@@ -36,7 +36,7 @@ const NAV = [
       { view: 'deliverable-types',  icon: '◈', label: 'Deliverable Types' },
       { view: 'payout-destinations',icon: '◇', label: 'Payment Destinations' },
       { view: 'payment-methods',    icon: '◈', label: 'Payment Methods' },
-      { view: 'tiktok-accounts',    icon: '◎', label: 'TikTok Accounts' },
+      { view: 'platform-accounts',   icon: '◎', label: 'Platform Accounts' },
       { view: 'users',              icon: '○', label: 'Users' },
     ]
   }
@@ -59,7 +59,7 @@ export default function AdminDashboard() {
       case 'deliverable-types':   return <DeliverablesTypesView />;
       case 'payout-destinations': return <PaymentDestinationsView />;
       case 'payment-methods':     return <PaymentMethodsView />;
-      case 'tiktok-accounts':     return <TikTokAccountsView />;
+      case 'platform-accounts':    return <PlatformAccountsView />;
       case 'users':               return <UsersView />;
       default:                    return <AdminOverview setActiveView={setActiveView} />;
     }
