@@ -680,25 +680,28 @@ $$ language plpgsql immutable;
 
 -- Profile Insights (Coupler: Append mode)
 create or replace view public.tiktok_profile_insights_view as
-select distinct on (tiktok_username, date) * from (
-  select account__username as tiktok_username, report__date as date,
-    engagement__total_followers as followers_count,
-    engagement__followers_count_on_date as net_followers,
+select
+  tiktok_username, date, followers_count,
+  followers_count - lag(followers_count) over (partition by tiktok_username order by date) as net_followers,
+  likes, shares, profile_views, video_views, comments
+from (
+  select distinct on (tiktok_username, date)
+    account__username as tiktok_username,
+    report__date as date,
+    engagement__followers_count_on_date as followers_count,
     engagement__likes as likes, engagement__shares as shares,
     engagement__profile_views as profile_views,
     engagement__video_views as video_views,
     engagement__comments as comments
-  from public.tiktok_profile_insights_kym
-  where engagement__followers_count_on_date > 0
-  union all
-  select account__username, report__date,
-    engagement__total_followers, engagement__followers_count_on_date,
-    engagement__likes, engagement__shares, engagement__profile_views,
-    engagement__video_views, engagement__comments
-  from public.tiktok_profile_insights_mys
-  where engagement__followers_count_on_date > 0
-) t
-order by tiktok_username, date;
+  from (
+    select * from public.tiktok_profile_insights_kym
+    where engagement__followers_count_on_date > 100
+    union all
+    select * from public.tiktok_profile_insights_mys
+    where engagement__followers_count_on_date > 100
+  ) raw
+  order by tiktok_username, date, engagement__followers_count_on_date desc nulls last
+) deduped;
 
 -- Audience Gender (Coupler: Replace mode)
 create or replace view public.tiktok_audience_gender_view as
