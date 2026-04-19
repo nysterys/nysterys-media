@@ -607,9 +607,9 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
   );
 
 
-  // Gender: normalise 0-1 vs 0-100
+  // Gender: filter by period, then normalise 0-1 vs 0-100
   const genderMap = {};
-  data?.gender?.forEach(g => {
+  (data?.gender || []).filter(g => inPeriod(g.date, period)).forEach(g => {
     if (!genderMap[g.gender]) genderMap[g.gender] = [];
     genderMap[g.gender].push(Number(g.percentage) || 0);
   });
@@ -620,10 +620,11 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
       color: k === 'Male' ? 'var(--blue)' : k === 'Female' ? 'var(--purple)' : 'var(--text-dim)' };
   });
 
-  // Country: normalise, top 5
-  const allCountryVals   = (data?.country || []).map(c => Number(c.percentage) || 0);
+  // Country: filter by period, normalise, top 5
+  const countryFiltered  = (data?.country || []).filter(c => inPeriod(c.date, period));
+  const allCountryVals   = countryFiltered.map(c => Number(c.percentage) || 0);
   const countryIsPercent = allCountryVals.some(v => v > 1);
-  const topCountries     = [...(data?.country || [])]
+  const topCountries     = [...countryFiltered]
     .sort((a, b) => (b.percentage || 0) - (a.percentage || 0))
     .slice(0, 5)
     .map(c => {
@@ -761,7 +762,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
 
           {/* Audience */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <ChartCard title="AUDIENCE GENDER" subtitle="current snapshot">
+            <ChartCard title="AUDIENCE GENDER">
               {genderAvg.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>
@@ -773,7 +774,7 @@ export default function AnalyticsPage({ isAdmin, creatorProfileId }) {
                 </div>
               ) : <DonutChart segments={genderAvg} size={160} />}
             </ChartCard>
-            <ChartCard title="TOP COUNTRIES" subtitle="current snapshot">
+            <ChartCard title="TOP COUNTRIES">
               {topCountries.length === 0 ? (
                 <div>
                   <div className="text-muted text-sm" style={{ marginBottom: 8 }}>No data</div>

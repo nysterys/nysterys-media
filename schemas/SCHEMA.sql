@@ -703,29 +703,38 @@ from (
   order by tiktok_username, date, engagement__followers_count_on_date desc nulls last
 ) deduped;
 
--- Audience Gender (Coupler: Replace mode)
+-- Audience Gender (Coupler: Append mode)
 create or replace view public.tiktok_audience_gender_view as
-select account__username as tiktok_username,
-  audience__gender as gender,
-  engagement____of_followers as percentage,
-  engagement__total_followers as follower_count
-from public.tiktok_audience_gender_kym
-union all
-select account__username, audience__gender,
-  engagement____of_followers, engagement__total_followers
-from public.tiktok_audience_gender_mys;
+select distinct on (tiktok_username, date, gender) * from (
+  select account__username as tiktok_username,
+    report__date as date,
+    audience__gender as gender,
+    engagement____of_followers as percentage,
+    engagement__total_followers as follower_count
+  from public.tiktok_audience_gender_kym
+  union all
+  select account__username, report__date, audience__gender,
+    engagement____of_followers, engagement__total_followers
+  from public.tiktok_audience_gender_mys
+) t
+order by tiktok_username, date, gender;
 
--- Audience Country (Coupler: Replace mode)
+-- Audience Country (Coupler: Append mode)
 create or replace view public.tiktok_audience_country_view as
-select account__username as tiktok_username,
-  audience__country as country,
-  engagement____of_followers as percentage,
-  engagement__total_followers as follower_count
-from public.tiktok_audience_country_kym
-union all
-select account__username, audience__country,
-  engagement____of_followers, engagement__total_followers
-from public.tiktok_audience_country_mys;
+select distinct on (tiktok_username, date, country) * from (
+  select account__username as tiktok_username,
+    report__date as date,
+    audience__country as country,
+    engagement____of_followers as percentage,
+    engagement__total_followers as follower_count
+  from public.tiktok_audience_country_kym
+  union all
+  select account__username, report__date, audience__country,
+    engagement____of_followers, engagement__total_followers
+  from public.tiktok_audience_country_mys
+) t
+order by tiktok_username, date, country;
+
 
 -- Audience Hourly Activity (Coupler: Append mode)
 create or replace view public.tiktok_audience_hourly_view as
