@@ -115,13 +115,14 @@ export default function AgenciesView() {
               <col style={{ width: 80 }} />
               <col style={{ width: '18%' }} />
               <col style={{ width: '17%' }} />
+              <col style={{ width: 30 }} />
               <col style={{ width: 130 }} />
               <col />
               <col style={{ width: 90 }} />
               <col style={{ width: 160 }} />
             </colgroup>
             <thead>
-              <tr><th></th><th>Name</th><th>Contact</th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
+              <tr><th></th><th>Name</th><th>Contact</th><th></th><th>Terms</th><th>Activity</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               {agencies.map(a => {
@@ -153,15 +154,20 @@ export default function AgenciesView() {
                     <td style={{ fontWeight: 500 }}>{a.name}</td>
                     <td>
                       {a.contact_name ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {a.email ? (
-                            <a href={`mailto:${a.email}`} title={a.email} className="link" style={{ fontWeight: 400 }}>
-                              {a.contact_name}
-                            </a>
-                          ) : a.contact_name}
-                          <ContactMethodIcon method={a.preferred_contact} />
-                        </div>
+                        a.email ? (
+                          <a
+                            href={`mailto:${a.email}`}
+                            title={[a.email, a.phone].filter(Boolean).join('\n')}
+                            className="link"
+                            style={{ fontWeight: 400 }}
+                          >
+                            {a.contact_name}
+                          </a>
+                        ) : a.contact_name
                       ) : <span className="text-muted">—</span>}
+                    </td>
+                    <td style={{ paddingLeft: 0 }}>
+                      <ContactMethodIcon method={a.preferred_contact} />
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{a.payment_terms || <span className="text-muted">—</span>}</td>
                     <td>
