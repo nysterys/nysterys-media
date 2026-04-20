@@ -145,6 +145,31 @@ insert into public.deliverable_types (name, description) values
   ('Bundle', 'Multi-format package deal');
 
 -- ============================================================
+-- PAYMENT TERMS (lookup table for agency payment schedules)
+-- ============================================================
+create table public.payment_terms (
+  id uuid default uuid_generate_v4() primary key,
+  name text not null,
+  sort_order int default 0,
+  is_active boolean default true,
+  created_at timestamptz default now()
+);
+
+alter table public.payment_terms enable row level security;
+
+create policy "Authenticated can read payment terms" on public.payment_terms
+  for select using (auth.uid() is not null);
+
+create policy "Admin can manage payment terms" on public.payment_terms
+  for all using (public.get_my_role() = 'admin');
+
+insert into public.payment_terms (name, sort_order) values
+  ('Posting -1', 1),
+  ('Posting +0 days', 2),
+  ('Posting +5 days', 3),
+  ('Posting +14 days', 4);
+
+-- ============================================================
 -- AGENCIES / LABELS
 -- ============================================================
 create table public.agencies (
@@ -153,7 +178,10 @@ create table public.agencies (
   contact_name text,
   email text,
   phone text,
-  payment_terms text default 'Net 30',
+  website text,
+  portal_url text,
+  preferred_contact text,
+  payment_term_id uuid references public.payment_terms(id) on delete set null,
   notes text,
   is_active boolean default true,
   created_at timestamptz default now(),
@@ -504,8 +532,9 @@ create trigger handle_updated_at before update on public.payment_destinations
 -- ============================================================
 create table public.creator_payouts (
   id uuid default uuid_generate_v4() primary key,
-  invoice_id uuid references public.invoices(id) on delete cascade not null unique,
-  campaign_id uuid references public.campaigns(id) on delete cascade not null,
+  -- invoice_id is nullable: campaign payouts link here; reward payouts use reward_entry_id instead
+  invoice_id uuid references public.invoices(id) on delete cascade unique,
+  campaign_id uuid references public.campaigns(id) on delete cascade,
   profile_id uuid references public.profiles(id) on delete set null,
   contracted_amount numeric(10,2),
   payout_amount numeric(10,2),
