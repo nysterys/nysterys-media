@@ -642,7 +642,7 @@ function InvoiceForm({ invoice, row, onUpdated }) {
       </div>
       <div className="form-group">
         <label className="form-label">Notes</label>
-        <textarea className="form-textarea" value={form.payment_notes} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} style={{ minHeight: 52 }} />
+        <textarea className="form-textarea" value={form.payment_notes} maxLength={1000} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} style={{ minHeight: 52 }} />
       </div>
 
       <div className="divider" />
@@ -828,7 +828,7 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
       </div>
       <div className="form-group">
         <label className="form-label">Notes</label>
-        <input className="form-input" value={form.payout_notes} onChange={e => setForm(f => ({ ...f, payout_notes: e.target.value }))} placeholder="e.g. Deducted $12 processing fee" />
+        <input className="form-input" value={form.payout_notes} maxLength={500} onChange={e => setForm(f => ({ ...f, payout_notes: e.target.value }))} placeholder="e.g. Deducted $12 processing fee" />
       </div>
       <div className="divider" />
       <div className="flex items-center justify-between mb-12">
@@ -888,7 +888,7 @@ function PayoutForm({ payout, splits, destinations, row, onUpdated }) {
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Reference / TX ID</label>
-              <input className="form-input" value={sf.reference} onChange={e => setSF(i, 'reference', e.target.value)} placeholder="Optional" />
+              <input className="form-input" value={sf.reference} maxLength={200} onChange={e => setSF(i, 'reference', e.target.value)} placeholder="Optional" />
             </div>
           </div>
           <div className="form-row" style={{ marginBottom: 0 }}>

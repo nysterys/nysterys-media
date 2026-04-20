@@ -1,3 +1,8 @@
+// SQL injection via the Supabase JS client is architecturally prevented:
+// all values passed to .eq(), .insert(), .update(), .filter() etc. are
+// JSON-encoded HTTP parameters through PostgREST — never interpolated into SQL.
+// Data-level security is enforced by Supabase Row Level Security (RLS) policies
+// on every table. The frontend layer performs input validation for data integrity.
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;

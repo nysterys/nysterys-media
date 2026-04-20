@@ -237,8 +237,12 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
   function normalizeUrl(url) {
     const trimmed = url.trim();
     if (!trimmed) return null;
-    if (!/^https?:\/\//i.test(trimmed)) return `https://${trimmed}`;
-    return trimmed;
+    const withProto = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      const parsed = new URL(withProto);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+      return withProto;
+    } catch { return null; }
   }
 
   async function save() {
@@ -250,8 +254,13 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
     setError('');
     const payload = {
       ...form,
-      website:    normalizeUrl(form.website),
-      portal_url: normalizeUrl(form.portal_url),
+      name:         form.name.trim(),
+      contact_name: form.contact_name.trim() || null,
+      email:        form.email.trim().toLowerCase() || null,
+      phone:        form.phone.trim() || null,
+      notes:        form.notes.trim() || null,
+      website:      normalizeUrl(form.website),
+      portal_url:   normalizeUrl(form.portal_url),
     };
     if (agency) {
       await supabase.from('agencies').update(payload).eq('id', agency.id);
@@ -273,22 +282,22 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
           {error && <div className="login-error" style={{ marginBottom: 16 }}>{error}</div>}
           <div className="form-group">
             <label className="form-label">Agency / Label Name *</label>
-            <input className="form-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="YTK Media" />
+            <input className="form-input" value={form.name} maxLength={120} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="YTK Media" />
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Contact Name</label>
-              <input className="form-input" value={form.contact_name} onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))} placeholder="Vasily" />
+              <input className="form-input" value={form.contact_name} maxLength={120} onChange={e => setForm(f => ({ ...f, contact_name: e.target.value }))} placeholder="Vasily" />
             </div>
             <div className="form-group">
               <label className="form-label">Email</label>
-              <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              <input className="form-input" type="email" value={form.email} maxLength={254} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Phone</label>
-              <input className="form-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+              <input className="form-input" value={form.phone} maxLength={30} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
             </div>
             <div className="form-group">
               <label className="form-label">Preferred Contact</label>
@@ -301,11 +310,11 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Website</label>
-              <input className="form-input" value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="ytkmedia.com" />
+              <input className="form-input" value={form.website} maxLength={500} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="ytkmedia.com" />
             </div>
             <div className="form-group">
               <label className="form-label">Portal URL</label>
-              <input className="form-input" value={form.portal_url} onChange={e => setForm(f => ({ ...f, portal_url: e.target.value }))} placeholder="creator-portal.agency.com" />
+              <input className="form-input" value={form.portal_url} maxLength={500} onChange={e => setForm(f => ({ ...f, portal_url: e.target.value }))} placeholder="creator-portal.agency.com" />
             </div>
           </div>
           <div className="form-row">
@@ -319,7 +328,7 @@ function AgencyModal({ agency, paymentTerms, onClose, onSaved }) {
           </div>
           <div className="form-group">
             <label className="form-label">Notes</label>
-            <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            <textarea className="form-textarea" value={form.notes} maxLength={2000} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
           </div>
         </div>
         <div className="modal-footer">

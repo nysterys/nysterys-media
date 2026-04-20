@@ -587,7 +587,7 @@ function EntryForm({ entry, programs, creators, onSaved }) {
       </div>
       <div className="form-group">
         <label className="form-label">Notes</label>
-        <textarea className="form-textarea" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 52 }} />
+        <textarea className="form-textarea" value={form.notes} maxLength={2000} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 52 }} />
       </div>
       <button className="btn btn-primary w-full mt-12" onClick={save} disabled={saving} style={{ justifyContent: 'center' }}>
         {saving ? 'Saving...' : entry?.entry_id ? 'Update Entry' : 'Create Entry'}
@@ -764,7 +764,7 @@ function RewardInvoiceForm({ entry, onUpdated }) {
       </div>
       <div className="form-group">
         <label className="form-label">Notes</label>
-        <textarea className="form-textarea" value={form.payment_notes} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} style={{ minHeight: 44 }} />
+        <textarea className="form-textarea" value={form.payment_notes} maxLength={1000} onChange={e => setForm(f => ({ ...f, payment_notes: e.target.value }))} style={{ minHeight: 44 }} />
       </div>
 
       <div className="divider" />
@@ -962,7 +962,7 @@ function RewardPayoutForm({ entry, onUpdated }) {
       </div>
       <div className="form-group">
         <label className="form-label">Notes</label>
-        <input className="form-input" value={form.payout_notes} onChange={e => setForm(f => ({ ...f, payout_notes: e.target.value }))} />
+        <input className="form-input" value={form.payout_notes} maxLength={500} onChange={e => setForm(f => ({ ...f, payout_notes: e.target.value }))} />
       </div>
 
       <div className="divider" />
