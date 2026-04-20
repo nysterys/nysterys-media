@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
@@ -311,12 +312,7 @@ export default function CampaignsPage({ isAdmin, profileId, pendingCampaignId, o
     setSelectedCampaign(null);
   }
 
-  useEffect(() => {
-    if (!selectedCampaign) return;
-    const handler = (e) => { if (e.key === 'Escape') closeDetail(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [selectedCampaign]);
+  useEscapeKey(useCallback(closeDetail, []), !!selectedCampaign);
 
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 

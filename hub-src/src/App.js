@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import LoginPage from './pages/LoginPage';
@@ -62,9 +62,23 @@ function AppInner() {
   );
 }
 
+function GlobalEscapeHandler() {
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key !== 'Escape') return;
+      const overlays = document.querySelectorAll('.modal-overlay');
+      if (overlays.length > 0) overlays[overlays.length - 1].click();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
+  return null;
+}
+
 export default function App() {
   return (
     <AuthProvider>
+      <GlobalEscapeHandler />
       <AppInner />
     </AuthProvider>
   );

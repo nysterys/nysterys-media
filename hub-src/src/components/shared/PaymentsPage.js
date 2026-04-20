@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { supabase } from '../../lib/supabase';
 import Badge from './Badge';
 import { fmtDate, fmtMoney, extractMonths, isValidDateString, isValidNumber } from '../../utils/format';
@@ -75,6 +76,8 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
 
   const cashSort = useSortState('invoice_date', 'desc');
   const inkSort  = useSortState('campaign');
+
+  useEscapeKey(useCallback(() => setSelected(null), []), !!selected);
 
   useEffect(() => { fetchAll(); }, []);
 
