@@ -4,30 +4,29 @@ import { supabase } from '../../lib/supabase';
 import Badge from '../shared/Badge';
 import Comments from '../shared/Comments';
 import { format, parseISO } from 'date-fns';
-import { fmtDate, isValidDateString, isValidNumber, isValidUrl } from '../../utils/format';
+import { fmtDate, fmtMoney, isValidDateString, isValidNumber, isValidUrl, isInKind } from '../../utils/format';
+import { openPopup } from '../../utils/openPopup';
+import { getSignedUrl, validateUploadFile } from '../../utils/storage';
 
 const CAMPAIGN_STATUSES = ['Negotiating', 'Confirmed', 'Active', 'Completed', 'Cancelled'];
 const PAYMENT_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed', 'In Kind'];
 const DELIVERABLE_STATUSES = ['Not Started', 'Draft Submitted', 'Revisions Requested', 'Approved', 'Posted'];
 
-const fmtMoney = (n) => n != null ? `$${Number(n).toLocaleString()}` : '—';
-
-function openPopup(url) {
-  if (!url) return;
-  const w = 480, h = 720;
-  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-  const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
-  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
-}
-
-function isInKind(paymentMethod) {
-  return (paymentMethod || '').toLowerCase() === 'in kind';
-}
-
 // ===================== Markdown =====================
+// Escape HTML entities so raw user input can never inject tags.
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+// Only allow http/https links; anything else collapses to '#'.
+function safeLinkHref(url) {
+  try {
+    const p = new URL(url);
+    return ['http:', 'https:'].includes(p.protocol) ? url : '#';
+  } catch { return '#'; }
+}
 function renderMarkdown(md) {
   if (!md) return '';
-  let html = md
+  let html = escapeHtml(md)
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -35,7 +34,8 @@ function renderMarkdown(md) {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, (_, text, url) =>
+      `<a href="${safeLinkHref(url)}" target="_blank" rel="noopener noreferrer">${text}</a>`)
     .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
     .replace(/^\s*\d+\. (.+)$/gm, '<li>$1</li>')
     .replace(/^---$/gm, '<hr/>')
@@ -1234,10 +1234,7 @@ function fmtBytes(bytes) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-async function getDownloadUrl(bucket, path) {
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
-  return data?.signedUrl || null;
-}
+const getDownloadUrl = getSignedUrl;
 
 function InvoiceTab({ campaign, onUpdated }) {
   const inv = campaign.invoices?.[0];
@@ -1292,6 +1289,8 @@ function InvoiceTab({ campaign, onUpdated }) {
 
   async function uploadReceipt(file) {
     if (!file) return;
+    const err = validateUploadFile(file);
+    if (err) { alert(err); return; }
     let invoiceId = inv?.id;
     if (!invoiceId) {
       const { data: newInv } = await supabase.from('invoices').insert({
@@ -1454,6 +1453,15 @@ function FilesTab({ campaign }) {
 
   async function uploadFiles(fileList) {
     if (!fileList || fileList.length === 0) return;
+    const CAMPAIGN_FILE_TYPES = [
+      'application/pdf','image/jpeg','image/png','image/gif','image/webp',
+      'video/mp4','video/quicktime','video/x-msvideo',
+      'text/plain','application/zip','application/x-zip-compressed',
+    ];
+    for (const file of Array.from(fileList)) {
+      const err = validateUploadFile(file, { maxMB: 200, allowedTypes: CAMPAIGN_FILE_TYPES });
+      if (err) { alert(`${file.name}: ${err}`); return; }
+    }
     setUploading(true);
     const { data: { user } } = await supabase.auth.getUser();
     for (const file of Array.from(fileList)) {

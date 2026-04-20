@@ -100,3 +100,10 @@ export function isValidUrl(url) {
     return false;
   }
 }
+
+/**
+ * Returns true if the payment method is "In Kind" (case-insensitive).
+ */
+export function isInKind(method) {
+  return (method || '').toLowerCase() === 'in kind';
+}

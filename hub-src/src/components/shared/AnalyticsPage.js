@@ -4,15 +4,7 @@ import { SparkLine, BarChart, HBar, DonutChart, StatTile, ChartCard, fmtNum, fmt
 import { format, parseISO, addDays } from 'date-fns';
 import { fmtDate, extractMonths } from '../../utils/format';
 import { inPeriod, PeriodSelect } from '../../utils/period';
-
-function openPopup(url) {
-  if (!url) return;
-  const w = 480, h = 720;
-  window.open(url, '_blank',
-    `width=${w},height=${h},left=${Math.round(window.screenX + (window.outerWidth - w) / 2)},` +
-    `top=${Math.round(window.screenY + (window.outerHeight - h) / 2)},` +
-    `toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
-}
+import { openPopup } from '../../utils/openPopup';
 
 // ── Regression helpers ────────────────────────────────────────────────────────
 

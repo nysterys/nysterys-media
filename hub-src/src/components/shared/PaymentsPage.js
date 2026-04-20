@@ -2,33 +2,37 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { supabase } from '../../lib/supabase';
 import Badge from './Badge';
-import { fmtDate, fmtMoney, extractMonths, isValidDateString, isValidNumber } from '../../utils/format';
+import { PayoutBadge, SplitStatusBadge } from './StatusBadges';
+import { fmtDate, fmtMoney, extractMonths, isValidDateString, isValidNumber, isInKind } from '../../utils/format';
 import { lastMonth, inPeriod, PeriodSelect } from '../../utils/period';
+import { openPopup } from '../../utils/openPopup';
+import { getSignedUrl, validateUploadFile } from '../../utils/storage';
 
 const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue', 'Disputed'];
 const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold', 'N/A'];
 const SPLIT_STATUSES  = ['Pending', 'Sent', 'Cleared', 'Failed'];
 
-function isInKind(pm) { return (pm || '').toLowerCase() === 'in kind'; }
-
-function openPopup(url) {
-  if (!url) return;
-  const w = 480, h = 720;
-  window.open(url, '_blank', `width=${w},height=${h},left=${Math.round(window.screenX+(window.outerWidth-w)/2)},top=${Math.round(window.screenY+(window.outerHeight-h)/2)},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
-}
-async function getSignedUrl(bucket, path) {
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
-  return data?.signedUrl || null;
-}
-
-function PayoutBadge({ status }) {
-  const map = { Pending: 'badge-not-invoiced', Partial: 'badge-pending', Paid: 'badge-paid', 'On Hold': 'badge-overdue' };
-  return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status || 'Pending'}</span>;
-}
-function SplitStatusBadge({ status }) {
-  const map = { Pending: 'badge-not-invoiced', Sent: 'badge-invoiced', Cleared: 'badge-paid', Failed: 'badge-overdue' };
-  return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status}</span>;
-}
+// Getter maps for sort — defined outside component to avoid re-creation on each render
+const CASH_GETTERS_STATIC = {
+  campaign:   r => r.campaign_name || '',
+  creator:    r => (r.creator_name || r.creator_full_name || '').toLowerCase(),
+  contracted: r => r.contracted_rate || 0,
+  agency:     r => r.agency_payment_status || '',
+  received:   r => r.you_received_date || '',
+  cashin:     r => r.amount_received ?? r.invoice_amount ?? 0,
+  fee:        r => r.processing_fee || 0,
+  payout:     r => r.payout_status || '',
+  payoutamt:  r => r.payout_amount || 0,
+  splits:     r => r.splits_cleared || 0,
+  invoice_date: r => r.invoice_date || '',
+};
+const INK_GETTERS_STATIC = {
+  campaign:      r => r.campaign_name || '',
+  creator:       r => (r.creator_name || r.creator_full_name || '').toLowerCase(),
+  agency:        r => r.agency_name || '',
+  fairvalue:     r => r.invoice_amount ?? r.contracted_rate ?? 0,
+  agencystatus:  r => r.agency_payment_status || '',
+};
 
 // ── Shared sort helper ────────────────────────────────────────────────────────
 function SortTh({ sortBy, sortDir, col, onToggle, children }) {
@@ -107,29 +111,8 @@ export default function PaymentsPage({ isAdmin, creatorProfileId }) {
     return true;
   });
 
-  const CASH_GETTERS = {
-    campaign:   r => r.campaign_name || '',
-    creator:    r => (r.creator_name || r.creator_full_name || '').toLowerCase(),
-    contracted: r => r.contracted_rate || 0,
-    agency:     r => r.agency_payment_status || '',
-    received:   r => r.you_received_date || '',
-    cashin:     r => r.amount_received ?? r.invoice_amount ?? 0,
-    fee:        r => r.processing_fee || 0,
-    payout:     r => r.payout_status || '',
-    payoutamt:  r => r.payout_amount || 0,
-    splits:     r => r.splits_cleared || 0,
-    invoice_date: r => r.invoice_date || '',
-  };
-  const INK_GETTERS = {
-    campaign:      r => r.campaign_name || '',
-    creator:       r => (r.creator_name || r.creator_full_name || '').toLowerCase(),
-    agency:        r => r.agency_name || '',
-    fairvalue:     r => r.invoice_amount ?? r.contracted_rate ?? 0,
-    agencystatus:  r => r.agency_payment_status || '',
-  };
-
-  const cashRows = cashSort.sortRows(filtered.filter(r => !isInKind(r.payment_method)), CASH_GETTERS);
-  const inkRows  = inkSort.sortRows(filtered.filter(r => isInKind(r.payment_method)), INK_GETTERS);
+  const cashRows = cashSort.sortRows(filtered.filter(r => !isInKind(r.payment_method)), CASH_GETTERS_STATIC);
+  const inkRows  = inkSort.sortRows(filtered.filter(r => isInKind(r.payment_method)), INK_GETTERS_STATIC);
 
   const totalContracted    = filtered.reduce((s, r) => s + (r.contracted_rate || 0), 0);
   const totalReceived      = filtered.filter(r => r.you_received && !isInKind(r.payment_method)).reduce((s, r) => s + (r.amount_received || r.invoice_amount || 0), 0);
@@ -600,6 +583,8 @@ function InvoiceForm({ invoice, row, onUpdated }) {
 
   async function uploadReceipt(file) {
     if (!file) return;
+    const err = validateUploadFile(file);
+    if (err) { alert(err); return; }
     let invoiceId = invoice?.id;
     if (!invoiceId) {
       const { data: newInv } = await supabase.from('invoices').insert({ campaign_id: row.campaign_id, payment_status: form.payment_status || 'Not Invoiced' }).select().single();

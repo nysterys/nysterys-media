@@ -24,12 +24,14 @@ export default function Comments({ campaignId }) {
 
   async function submitComment(e) {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    const body = newComment.trim();
+    if (!body) return;
+    if (body.length > 2000) { alert('Comment must be 2000 characters or fewer.'); return; }
     setLoading(true);
     await supabase.from('comments').insert({
       campaign_id: campaignId,
       author_id: profile.id,
-      body: newComment.trim(),
+      body,
     });
     setNewComment('');
     await fetchComments();
@@ -82,6 +84,7 @@ export default function Comments({ campaignId }) {
           value={newComment}
           onChange={e => setNewComment(e.target.value)}
           placeholder="Add a comment..."
+          maxLength={2000}
           disabled={loading}
         />
         <button className="btn btn-primary btn-sm" type="submit" disabled={loading || !newComment.trim()}>

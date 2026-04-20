@@ -1,38 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import Badge from './Badge';
+import { PayoutBadge, SplitStatusBadge } from './StatusBadges';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
-import { fmtDate, fmtMoney, extractMonths, isValidNumber } from '../../utils/format';
+import { fmtDate, fmtMoney, extractMonths, isValidNumber, isInKind } from '../../utils/format';
 import { lastMonth, inPeriod, PeriodSelect } from '../../utils/period';
-
-function isInKind(m) { return (m || '').toLowerCase() === 'in kind'; }
-
-function PayoutBadge({ status }) {
-  const map = { 'Pending': 'badge-not-invoiced', 'Partial': 'badge-pending', 'Paid': 'badge-paid', 'On Hold': 'badge-overdue', 'N/A': 'badge-not-invoiced' };
-  return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status || 'Pending'}</span>;
-}
-
-function SplitStatusBadge({ status }) {
-  const map = { 'Pending': 'badge-not-invoiced', 'Sent': 'badge-invoiced', 'Cleared': 'badge-paid', 'Failed': 'badge-overdue' };
-  return <span className={`badge ${map[status] || 'badge-not-invoiced'}`}>{status}</span>;
-}
+import { openPopup } from '../../utils/openPopup';
+import { getSignedUrl, validateUploadFile } from '../../utils/storage';
 
 const AGENCY_STATUSES = ['Not Invoiced', 'Invoiced', 'Pending', 'Paid', 'Overdue'];
 const PAYOUT_STATUSES = ['Pending', 'Partial', 'Paid', 'On Hold'];
 const SPLIT_STATUSES  = ['Pending', 'Sent', 'Cleared', 'Failed'];
-
-function openPopup(url) {
-  if (!url) return;
-  const w = 480, h = 720;
-  const left = Math.round(window.screenX + (window.outerWidth - w) / 2);
-  const top  = Math.round(window.screenY + (window.outerHeight - h) / 2);
-  window.open(url, '_blank', `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0,status=0,scrollbars=1,resizable=1`);
-}
-
-async function getSignedUrl(bucket, path) {
-  const { data } = await supabase.storage.from(bucket).createSignedUrl(path, 60);
-  return data?.signedUrl || null;
-}
 
 // ============================================================
 // Main page
@@ -709,6 +687,8 @@ function RewardInvoiceForm({ entry, onUpdated }) {
   }
 
   async function uploadReceipt(file) {
+    const err = validateUploadFile(file);
+    if (err) { alert(err); return; }
     let invId = invoice?.id;
     if (!invId) {
       const { data: newInv } = await supabase.from('invoices').insert({
