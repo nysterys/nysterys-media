@@ -71,6 +71,34 @@ Two-stage for both campaigns and rewards:
 
 **No em-dashes** anywhere in content. No TikTok Shop affiliate work.
 
+## Security Standards
+
+This app is accessible from the open internet. All code must follow these rules without exception.
+
+**SQL injection** — Not possible through the Supabase JS client by design: all `.eq()`, `.insert()`, `.update()`, `.filter()` values are JSON-encoded HTTP parameters through PostgREST, never interpolated into SQL. Do not use `.rpc()` with raw user input. Data-layer access control is enforced by Supabase Row Level Security on every table.
+
+**XSS** — React escapes JSX output by default. Never use `dangerouslySetInnerHTML` with user-supplied content. If markdown must be rendered as HTML, HTML-escape the raw input first (`&`, `<`, `>`, `"` → entities), then apply safe transforms only. Links extracted from user content must be validated with `safeLinkHref()` — only `http:` and `https:` protocols are allowed; `javascript:` and others must collapse to `#`.
+
+**Open redirect / URL handling** — Always use `openPopup()` from `utils/openPopup.js` to open external URLs. It validates the protocol before calling `window.open()`. Never call `window.open(userInput)` directly. URL fields saved to the DB must pass through `normalizeUrl()` (which validates with `new URL()` and enforces `http:`/`https:`).
+
+**File uploads** — Always call `validateUploadFile(file)` from `utils/storage.js` before uploading to Supabase Storage. It enforces a max file size (10 MB for receipts, 200 MB for campaign files) and an explicit MIME type allowlist. Never upload a file without this check.
+
+**Input sanitization** — All free-text inputs must have a `maxLength` attribute on the element and be `.trim()`'d before DB writes. Use these limits as a baseline: names 120, emails 254, phone 30, URLs 500, notes/descriptions 2000, short notes 500-1000, reference/TX IDs 200. Numeric fields must be parsed with `parseFloat`/`parseInt` before insert — never store a string where a number is expected. Dropdown/select values must come from a controlled allowlist, not free text.
+
+**Shared utilities** — Always import from these; never redefine locally:
+- `utils/format.js` — `fmtMoney`, `fmtDate`, `isValidEmail`, `isValidUrl`, `isValidNumber`, `isValidDateString`, `isInKind`
+- `utils/openPopup.js` — `openPopup`
+- `utils/storage.js` — `getSignedUrl`, `validateUploadFile`
+- `components/shared/StatusBadges.js` — `PayoutBadge`, `SplitStatusBadge`
+
+**Content Security Policy** — The CSP in `public/index.html` includes `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, and `frame-ancestors 'none'`. Do not loosen these. The `unsafe-inline` on `script-src` is a CRA limitation and cannot be removed without migrating the build tool.
+
+**OWASP coverage summary:**
+- A01 Broken Access Control — enforced by Supabase RLS at DB level
+- A03 Injection — prevented by parameterized PostgREST queries + input validation above
+- A05 Security Misconfiguration — CSP, X-Frame-Options, noindex, no public signup
+- A07 Auth Failures — Supabase email+password, client-side lockout (5 attempts → 15 min), invites only, 12-char minimum password on reset
+
 ## Environment
 
 ```
