@@ -311,6 +311,13 @@ export default function CampaignsPage({ isAdmin, profileId, pendingCampaignId, o
     setSelectedCampaign(null);
   }
 
+  useEffect(() => {
+    if (!selectedCampaign) return;
+    const handler = (e) => { if (e.key === 'Escape') closeDetail(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [selectedCampaign]);
+
   if (loading) return <div className="page"><div className="text-muted">Loading...</div></div>;
 
   return (
